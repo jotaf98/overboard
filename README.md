@@ -6,7 +6,8 @@ Pure Python dashboard for monitoring deep learning experiments (a.k.a. TensorBoa
 ## Requirements:
 
 - Python 3.6
-- PyQT5
+- PyQt 5
+- PyQtGraph 0.10
 - NumPy
 
 Note that you can probably log experiments from a Pyton 2 script, since it only has to load the `logger` module.
