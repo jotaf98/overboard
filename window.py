@@ -86,6 +86,7 @@ class Window(QtWidgets.QMainWindow):
     sidebar.addWidget(table)
     self.table = table
     self.table_args = {}  # maps argument names to column indices
+    self.prev_sort = None
 
     # create the scroll area with plots
     (plot_scroll_widget, plot_scroll_area) = create_scroller()
@@ -140,15 +141,16 @@ class Window(QtWidgets.QMainWindow):
 
     # print a row of argument values for this experiment
     for arg_name in exp.meta.keys():
-      if arg_name not in table_args:  # a new argument name, add a column
-        col = table.columnCount()
-        table.setColumnCount(col + 1)
-        table.setHorizontalHeaderItem(col, QtWidgets.QTableWidgetItem(arg_name))  #, QtWidgets.QTableWidgetItem.Type
-        table_args[arg_name] = col
-      else:
-        col = table_args[arg_name]
-      
-      self.set_table_cell(row, col, exp.meta.get(arg_name, ''))
+      if not arg_name.startswith('_'):
+        if arg_name not in table_args:  # a new argument name, add a column
+          col = table.columnCount()
+          table.setColumnCount(col + 1)
+          table.setHorizontalHeaderItem(col, QtWidgets.QTableWidgetItem(arg_name))  #, QtWidgets.QTableWidgetItem.Type
+          table_args[arg_name] = col
+        else:
+          col = table_args[arg_name]
+        
+        self.set_table_cell(row, col, exp.meta.get(arg_name, ''))
 
     if refresh_table:
       self.refresh_table()
@@ -178,7 +180,8 @@ class Window(QtWidgets.QMainWindow):
     # restore sorting
     table = self.table
     table.setSortingEnabled(True)
-    table.sortItems(*self.prev_sort)  # restore sort state (which column and direction)
+    if self.prev_sort:  # restore sort state (which column and direction)
+      table.sortItems(*self.prev_sort)
 
     table.resizeColumnsToContents()
     
