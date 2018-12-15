@@ -43,9 +43,12 @@ def train(args, model, device, train_loader, optimizer, epoch, logger):
     
     pred = output.max(1, keepdim=True)[1] # get the index of the max log-probability
     accuracy = pred.eq(target.view_as(pred)).double().mean()
+    
+      # log the loss and accuracy
     logger.update_average({'train.loss': loss.item(), 'train.accuracy': accuracy.item()})
 
     if batch_idx % args.log_interval == 0:
+      # display values in console
       avg = logger.average()
       print(f"Train ep {epoch} ({batch_idx * len(data)}/{len(train_loader.dataset)}), loss: {avg['train.loss']:.3f}, acc: {avg['train.accuracy']*100:.1f}%")
 
@@ -59,13 +62,17 @@ def test(args, model, device, test_loader, logger):
 
       pred = output.max(1, keepdim=True)[1] # get the index of the max log-probability
       accuracy = pred.eq(target.view_as(pred)).double().mean()
+
+      # log the loss and accuracy
       logger.update_average({'val.loss': loss.item(), 'val.accuracy': accuracy.item()})
 
+  # display final values in console
   avg = logger.average()
   print(f"Val loss: {avg['val.loss']:.3f}, acc: {avg['val.accuracy']*100:.1f}%")
 
 def main():
   # Training settings
+  parser = argparse.ArgumentParser()
   parser.add_argument("experiment", nargs='?', default="")
   parser.add_argument('--batch-size', type=int, default=64, metavar='N',
             help='input batch size for training (default: 64)')
