@@ -8,7 +8,8 @@ Pure Python dashboard for monitoring deep learning experiments (a.k.a. TensorBoa
 - Python 3.6
 - PyQt 5
 - PyQtGraph 0.10
-- NumPy
+
+With Conda, just run: `conda install pyqt pyqtgraph -c anaconda`
 
 Note that you can probably log experiments from a Pyton 2 script, since it only has to load the `logger` module.
 
@@ -16,11 +17,15 @@ However, the main OverBoard interface (`overboard.py`) requires Python 3.
 
 ## Usage
 
-Run `examples/synthetic.py` to generate some logs.
+All the following commands assume you navigated to the OverBoard directory (`cd <overboard-path>`).
 
-The command line interface to visualize results is `python3 overboard.py <directory-name>` (pointing it to the main directory where logs are located).
+Make the OverBoard package available on the Python path: `pip install -e .`
 
-`examples/mnist.py` shows a fully-integrated PyTorch example.
+Generate some test logs (gradually over time): `python3 ./examples/synthetic.py`
+
+On a different console, navigate to the same path and run `python3 overboard.py ./logs`
+
+To show MNIST training instead of synthetic logs, run `python3 ./examples/mnist.py`.
 
 ## Author
 
