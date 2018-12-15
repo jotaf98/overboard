@@ -9,7 +9,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 
-sys.path.append('../')
 from logger import Logger
 
 

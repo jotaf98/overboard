@@ -3,8 +3,6 @@
 
 import sys, math, random, time
 
-# simplest way to import logger from another directory
-sys.path.append('../')
 from logger import Logger
 
 print("Open OverBoard in another terminal: python3 overboard.py ./logs")
