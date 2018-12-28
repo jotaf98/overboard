@@ -34,9 +34,10 @@ class Logger:
     elif not isinstance(meta, dict):
       raise AssertionError("Meta should be a dictionary or argparse.Namespace.")
     meta['_done'] = False
-    meta['_vis'] = {}
+    meta['vis'] = []
     self.meta = meta
     self.save_timestamp = save_timestamp
+    self.vis_functions = {}
 
   def __enter__(self):
     # create directory if it doesn't exist
@@ -128,26 +129,31 @@ class Logger:
     else:
       print(text)
   
-  def vis(self, func, *args, **kwargs):
-    """Store a function and values for later visualization.
-    The function will be called with the given arguments and keyword arguments.
-    It should return a list of matplotlib.Figure objects to be shown."""
+  def vis(self, name, func, *args, **kwargs):
+    """Store a visualization function call, with a unique name.
+    OverBoard will call the given function with the name as argument, plus the given arguments and keyword arguments.
+    It should return a list of matplotlib.Figure objects, which will be shown as extra plots."""
 
-    source_file = inspect.getsourcefile(func)  # python source for function
-    func_name = func.__name__  # function name
-    vis_list = self.meta['_vis']  # previously registered visualization functions
-    
-    if func_name not in vis_list:
-      # copy visualization function source file if not done yet
-      shutil.copy(source_file, self.directory)
+    if name in self.vis_functions:
+      # reuse previously registered visualization function
+      info = self.vis_functions[name]
+      if info['func'] != func:
+        raise ValueError("Attempting to register a different visualization function under a previously used name.")
+      source_file = info['source']
+    else:
+      # new function. copy function source file to freeze changes in visualization code
+      source_file = inspect.getsourcefile(func)  # python source for function
+      if not source_file or func.__name__ == '<lambda>':
+        raise ValueError("Only visualization functions defined at the top-level of a script are supported.")
+      shutil.copy(source_file, self.directory + '/' + name + '.py')
 
-      # register visualization function in the metadata (JSON file)
-      vis_list[func_name] = source_file
+      # register visualization function for quick look-up
+      self.vis_functions[name] = {'func': func, 'source': source_file}
+
+      # register also in the metadata (JSON file)
+      self.meta['vis'].append(name)
       self.save_meta()
 
-    elif vis_list[func_name] != source_file:
-      raise AssertionError("Attempting to register a visualization function with the same name but defined in different source files.")
-    
-    # pickle the data
-    data = {'func': func_name, 'source': os.path.basename(source_file), 'args': args, 'kwargs': kwargs}
-    save(data, self.directory + '/' + func_name + '.pth')
+    # pickle the function and arguments
+    data = {'func': func.__name__, 'source': source_file, 'args': args, 'kwargs': kwargs}
+    save(data, self.directory + '/' + name + '.pth')

@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 
-from logger import Logger
+from overboard import Logger
 
 
 class Net(nn.Module):
@@ -89,9 +89,9 @@ def main():
             help='random seed (default: 1)')
   parser.add_argument('--log-interval', type=int, default=10, metavar='N',
             help='how many batches to wait before logging training status')
-  parser.add_argument('--datadir', type=str, default='/data/joao/mnist/',
+  parser.add_argument('--datadir', type=str, default='/data/mnist/',
             help='MNIST data directory')
-  parser.add_argument('--outputdir', type=str, default='/data/joao/mnist-pytorch/',
+  parser.add_argument('--outputdir', type=str, default='/data/mnist-experiments/',
             help='output directory')
   args = parser.parse_args()
   use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -120,12 +120,17 @@ def main():
   model = Net().to(device)
   optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
 
+  # specify the logged statistics names, e.g. "train.loss"
   stat_names = [phase + '.' + stat for stat in ('loss', 'accuracy') for phase in ('train', 'val')]
 
+  # open logging stream
   with Logger(args.outputdir, stat_names, args) as logger:
+    # do training
     for epoch in range(1, args.epochs + 1):
       train(args, model, device, train_loader, optimizer, epoch, logger)
       test(args, model, device, test_loader, logger)
+
+      # record average statistics collected over this epoch (with logger.update_average)
       logger.append()
 
 

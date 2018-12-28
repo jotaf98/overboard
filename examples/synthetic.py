@@ -3,9 +3,9 @@
 
 import sys, math, random, time
 
-from logger import Logger
+from overboard import Logger
 
-print("Open OverBoard in another terminal: python3 overboard.py ./logs")
+print("Open OverBoard in another terminal: python3 -m overboard ./logs")
 
 # pretend that there are 10 runs/experiments
 for run in range(10):

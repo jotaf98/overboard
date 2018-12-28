@@ -1,33 +1,37 @@
 # OverBoard
 Pure Python dashboard for monitoring deep learning experiments (a.k.a. TensorBoard clone for PyTorch)
 
-## Work-in-progress
+## Installation
 
-## Requirements:
+The main OverBoard GUI uses Python 3; however, experiments can be logged from both Python 2 and 3 scripts.
 
-- Python 3.6
-- PyQt 5
-- PyQtGraph 0.10
+The main dependencies are PyQt 5 and PyQtGraph. These can be installed as follows:
 
-With Conda, just run: `conda install pyqt pyqtgraph -c anaconda`
+- With Conda: `conda install pyqt pyqtgraph -c anaconda`
 
-Note that you can probably log experiments from a Pyton 2 script, since it only has to load the `logger` module.
+- With pip: `pip install pyqt5 pyqtgraph`
 
-However, the main OverBoard interface (`overboard.py`) requires Python 3.
+Finally, OverBoard itself can be installed with `pip install overboard`.
 
 ## Usage
 
-All the following commands assume you navigated to the OverBoard directory (`cd <overboard-path>`).
+- Main interface: `python3 -m overboard <logs-directory>`.
 
-Make the OverBoard package available on the Python path: `pip install -e .`
+- Logging experiments is simple:
+```
+from overboard import Logger
 
-Generate some test logs (gradually over time): `python3 ./examples/synthetic.py`
+with Logger('./logs', ['loss', 'error]) as logger:
+  for iteration in range(100):
+    logger.append({'loss': 0, 'error': 0})
+```
 
-On a different console, navigate to the same path and run `python3 overboard.py ./logs`
+See the `examples` directory for more details.
 
-To show MNIST training instead of synthetic logs, run `python3 ./examples/mnist.py`.
+- `examples/synthetic.py`: Generate some test logs.
+- `examples/mnist.py`: The mandatory MNIST example.
 
 ## Author
 
-[João F. Henriques](http://www.robots.ox.ac.uk/~joao/)
+[Joao Henriques](http://www.robots.ox.ac.uk/~joao/)
 

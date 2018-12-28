@@ -1,2 +1,4 @@
 
-__all__ = ['logger', 'overboard']
+# expose logger on import
+
+from logger import Logger

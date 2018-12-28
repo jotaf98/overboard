@@ -10,9 +10,10 @@ from PyQt5.Qt import QPalette, QColor
 #QtWidgets.QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 #QtWidgets.QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
-#from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+import os
 
 import flowlayout, fastslider, plotwidget
+from visualizations import show_visualizations
 from experiments import Smoother
 
 
@@ -21,7 +22,8 @@ class Window(QtWidgets.QMainWindow):
     super(Window, self).__init__(parent=None)
     
     self.experiments = {}  # filled in later
-    self.plots = None
+    self.plots = None  # standard stats plots
+    self.visualizations = []  # custom visualization
 
     # get screen size
     screen_size = QtWidgets.QDesktopWidget().availableGeometry(self).size()
@@ -107,9 +109,6 @@ class Window(QtWidgets.QMainWindow):
     # window size and title
     self.resize(screen_size.width() * 0.6, screen_size.height() * 0.95)
     self.setWindowTitle('OverBoard - ' + args.folder)
-
-    #self.check_plot_visibility()
-    #for canvas in self.plot_canvas: canvas.draw()
   
   def add_experiment(self, exp, refresh_table=True):
     # add experiment to plots
@@ -135,9 +134,14 @@ class Window(QtWidgets.QMainWindow):
     # create icon (label with unicode symbol) with the plot color. u'\u2611 \u2610'
     icon = self.set_table_cell(row, 0, u'\u2611')
     icon.setForeground(QColor(exp.style.get('color', '#808080')))
-    icon.setData(Qt.UserRole, exp.name)  # store experiment name with icon, to be retrieved later in table_click
+    # store experiment name with icon, to be retrieved later in table_click
+    icon.setData(Qt.UserRole, 'hide')
+    icon.setData(Qt.UserRole + 1, exp.name)
 
-    self.set_table_cell(row, 1, exp.name)  # experiment name
+    # experiment name
+    label = self.set_table_cell(row, 1, exp.name)
+    label.setData(Qt.UserRole, 'select')
+    label.setData(Qt.UserRole + 1, exp.name)
 
     # print a row of argument values for this experiment
     for arg_name in exp.meta.keys():
@@ -206,34 +210,44 @@ class Window(QtWidgets.QMainWindow):
       self.refresh_table()
 
   def table_click(self, item):
-    # toggle visibility of a given experiment, if the icon is clicked
-    name = item.data(Qt.UserRole)
-    if name:
+    # check if there's an action associated with this cell
+    action = item.data(Qt.UserRole)
+    if action:
+      name = item.data(Qt.UserRole + 1)
       exp = self.experiments[name]
-      if exp.visible:
-        # remove all associated plots
-        self.plots.remove(exp.enumerate_plots())
+      if action == 'hide':
+        # toggle visibility of a given experiment, if the icon is clicked
+        if exp.visible:
+          # remove all associated plots
+          self.plots.remove(exp.enumerate_plots())
 
-        # reset icon and style
-        item.setForeground(QColor(128, 128, 128))
-        item.setText(u'\u2610')
+          # reset icon and style
+          item.setForeground(QColor(128, 128, 128))
+          item.setText(u'\u2610')
 
-        self.plots.drop_style(exp.style_order, exp.style)  # allow it to be used by other experiments
-        exp.style = {}
-      else:
-        # create plots, assigning new style
-        self.plots.add(exp.enumerate_plots())
+          self.plots.drop_style(exp.style_order, exp.style)  # allow it to be used by other experiments
+          exp.style = {}
+        else:
+          # create plots, assigning new style
+          self.plots.add(exp.enumerate_plots())
 
-        # restore icon
-        item.setForeground(QColor(exp.style.get('color', "#808080")))
-        item.setText(u'\u2611')
+          # restore icon
+          item.setForeground(QColor(exp.style.get('color', "#808080")))
+          item.setText(u'\u2611')
 
-      exp.visible = not exp.visible
+        exp.visible = not exp.visible
 
+      elif action == 'select':
+        # show visualizations for a given experiment
+        show_visualizations(self, exp)
 
   def size_slider_changed(self):
+    # resize plots and visualizations
     plotsize = self.size_slider.value()
     for panel in self.plots.panels.values():
+      panel.setFixedWidth(plotsize)
+      panel.setFixedHeight(plotsize)
+    for panel in self.visualizations:
       panel.setFixedWidth(plotsize)
       panel.setFixedHeight(plotsize)
   
@@ -275,6 +289,8 @@ def set_style(app):
   f.setFamily('sans-serif')
   f.setPointSize(12)
   app.setFont(f)
+
+  directory = os.path.dirname(os.path.realpath(__file__))
   
-  with open('style.qss', 'r') as file:
+  with open(directory + '/style.qss', 'r') as file:
     app.setStyleSheet(file.read())

@@ -3,13 +3,14 @@ import numpy as np
 
 class Experiment():
   def __init__(self, filename, base_folder):
-    path = os.path.dirname(filename)
-    self.name = os.path.relpath(path, base_folder)  # experiment name is the path relative to base folder
+    directory = os.path.dirname(filename)
+    self.name = os.path.relpath(directory, base_folder)  # experiment name is the path relative to base folder
     self.filename = filename
+    self.directory = directory
 
     # read JSON file for metadata (including timestamp), if it exists
     try:
-      with open(path + '/meta.json', 'r') as file:
+      with open(directory + '/meta.json', 'r') as file:
         self.meta = json.load(file)
     except IOError:
       self.meta = {}
