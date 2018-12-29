@@ -11,6 +11,8 @@ from torchvision import datasets, transforms
 
 from overboard import Logger
 
+import mnist_visualization
+
 
 class Net(nn.Module):
   def __init__(self):
@@ -51,6 +53,9 @@ def train(args, model, device, train_loader, optimizer, epoch, logger):
       avg = logger.average()
       print(f"Train ep {epoch} ({batch_idx * len(data)}/{len(train_loader.dataset)}), loss: {avg['train.loss']:.3f}, acc: {avg['train.accuracy']*100:.1f}%")
 
+      # store custom visualization function and related data
+      logger.vis('train', mnist_visualization.vis, data.cpu(), target.cpu(), pred.detach().cpu())
+
 def test(args, model, device, test_loader, logger):
   model.eval()
   with torch.no_grad():
@@ -68,6 +73,9 @@ def test(args, model, device, test_loader, logger):
   # display final values in console
   avg = logger.average()
   print(f"Val loss: {avg['val.loss']:.3f}, acc: {avg['val.accuracy']*100:.1f}%")
+  
+  # store custom visualization function and related data
+  logger.vis('val', mnist_visualization.vis, data[:args.batch_size,:].cpu(), target.cpu(), pred.detach().cpu())
 
 def main():
   # Training settings
