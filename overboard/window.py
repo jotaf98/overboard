@@ -12,9 +12,10 @@ from PyQt5.Qt import QPalette, QColor
 
 import os
 
-import flowlayout, fastslider, plotwidget
-from visualizations import show_visualizations
-from experiments import Smoother
+from .flowlayout import FlowLayout
+from .fastslider import Slider
+from .visualizations import show_visualizations
+from .experiments import Smoother
 
 
 class Window(QtWidgets.QMainWindow):
@@ -42,7 +43,7 @@ class Window(QtWidgets.QMainWindow):
     if plotsize == 0:
       plotsize = screen_size.width() * 0.1
     sidebar.addWidget(QtWidgets.QLabel('Plot size'))
-    slider = fastslider.Slider(Qt.Horizontal)  #QtWidgets.QSlider(Qt.Horizontal)
+    slider = Slider(Qt.Horizontal)  #QtWidgets.QSlider(Qt.Horizontal)
     slider.setMinimum(screen_size.width() * 0.05)
     slider.setMaximum(screen_size.width() * 0.8)
     slider.setTickInterval(screen_size.width() * 0.005)
@@ -53,7 +54,7 @@ class Window(QtWidgets.QMainWindow):
     
     """# smoothness slider
     sidebar.addWidget(QtWidgets.QLabel('Smoothness'))
-    slider = fastslider.Slider(Qt.Horizontal)  #QtWidgets.QSlider(Qt.Horizontal)
+    slider = Slider(Qt.Horizontal)  #QtWidgets.QSlider(Qt.Horizontal)
     slider.setMinimum(0)
     slider.setMaximum(10 * 4)  # smooth_slider_changed always divides by 4 (since sliders only support ints)
     slider.setTickInterval(1)
@@ -102,7 +103,7 @@ class Window(QtWidgets.QMainWindow):
     main.setSizes([sidebar_size, 1])
 
     # main layout for plots
-    self.flow_layout = flowlayout.FlowLayout(plot_scroll_widget)
+    self.flow_layout = FlowLayout(plot_scroll_widget)
     
     self.setCentralWidget(main)
 

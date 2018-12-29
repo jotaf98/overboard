@@ -1,5 +1,5 @@
 # OverBoard
-Pure Python dashboard for monitoring deep learning experiments (a.k.a. TensorBoard clone for PyTorch)
+Pure Python dashboard for monitoring deep learning experiments (a.k.a. TensorBoard clone for PyTorch, without a web browser)
 
 ## Installation
 
@@ -11,11 +11,11 @@ The main dependencies are PyQt 5 and PyQtGraph. These can be installed as follow
 
 - With pip: `pip install pyqt5 pyqtgraph`
 
-Finally, OverBoard itself can be installed with `pip install overboard`.
+Finally, OverBoard itself can be installed with: `pip install overboard`
 
 ## Usage
 
-- Main interface: `python3 -m overboard <logs-directory>`.
+- Main interface: `python3 -m overboard <logs-directory>`
 
 - Logging experiments is simple:
 ```
@@ -33,5 +33,5 @@ See the `examples` directory for more details.
 
 ## Author
 
-[Joao Henriques](http://www.robots.ox.ac.uk/~joao/)
+[João Henriques](http://www.robots.ox.ac.uk/~joao/)
 

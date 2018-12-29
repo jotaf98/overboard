@@ -1,4 +1,4 @@
 
 # expose logger on import
 
-from logger import Logger
+from .logger import Logger

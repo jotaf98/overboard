@@ -1,0 +1,66 @@
+
+/*QSplitter::handle {
+	background: #A0A0A0;
+	border: 1px;
+	width: 50px;
+}*/
+
+
+/* for the sliders */
+
+QSlider::groove:horizontal { 
+	background-color: #EAEAF2;
+	border: 1px solid #EAEAF2;   /* needed to render round edges */
+	border-radius: 1px;   /* needed to render round edges */
+
+	height: 2px;
+	margin-top: 4px; 
+	margin-bottom: 4px; 
+}
+
+QSlider::handle:horizontal { 
+	background-color: #4C72B0; 
+	border: 1px solid #4C72B0;  /* needed to render a circle */
+	border-radius: 5px;   /* needed to render a circle */
+
+	width: 8px; 
+	height: 10px; 
+	line-height: 10px; 
+	margin-top: -4px; 
+	margin-bottom: -4px; 
+}
+
+/*QSlider::handle:horizontal:hover { 
+	background-color: #4C72B0;
+}*/
+
+
+/* for the table */
+
+QTableView {
+  border: none;
+}
+
+QHeaderView {
+  background-color: white;
+  /*font-weight: bold;*/
+	text-align: left;
+}
+
+QHeaderView::section {
+  background-color: white;
+  height: 32px;
+  border: none;
+	border-right: 1px solid #EAEAF2;
+	padding: 4px;
+}
+
+QTableView::item {
+	border-right: 1px solid #EAEAF2;
+}
+
+QTableWidget {
+  alternate-background-color: #EAEAF2;
+  background-color: white;
+}
+

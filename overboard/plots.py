@@ -14,7 +14,7 @@ import numpy as np
 
 import pyqtgraph as pg
 
-import plotwidget
+from .plotwidget import create_plot_widget
 
 # define lists of styles to cycle
 palette = ["#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B3", "#937860", "#DA8BC3", "#8C8C8C", "#CCB974", "#64B5CD"]
@@ -62,7 +62,7 @@ class Plots():
       # check if panel exists. there's a different panel for each x coordinate (e.g. iterations, time)
       panel_id = (plot['panel'], plot['x'])
       if panel_id not in self.panels:  # create new panel
-        widget = plotwidget.create_plot_widget()
+        widget = create_plot_widget()
 
         # set size based on size slider
         if plotsize is None:

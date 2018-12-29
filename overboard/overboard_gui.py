@@ -13,9 +13,9 @@ import PyQt5.QtCore as QtCore
 QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
 QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
 
-from window import Window, set_style
-from experiments import Experiment, check_new_experiments
-from plots import Plots
+from .window import Window, set_style
+from .experiments import Experiment, check_new_experiments
+from .plots import Plots
 
 
 def main():
