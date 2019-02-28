@@ -207,9 +207,9 @@ def mouse_move(event, widget):
     names = [name for (name, line) in widget.plots_dict.items() if line is selected]  # ideally should return only 1
     names = ' '.join(names)
     # this trick prints floats with 3 significant digits and no sci notation (e.g. 1e-4). also consider integers.
-    if x == int(x): x = str(int(x))
+    if x.is_integer(): x = str(int(x))
     else: x = float('%.3g' % x)
-    if y == int(y): y = str(int(y))
+    if y.is_integer(): y = str(int(y))
     else: y = float('%.3g' % y)
     text = "%s<br/>(%s, %s)" % (names, x, y)
   else:
