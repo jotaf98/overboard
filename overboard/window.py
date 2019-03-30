@@ -269,28 +269,6 @@ def create_scroller():
 def set_style(app):
   app.setStyle("Fusion")
 
-  palette = QPalette()
-  palette.setColor(QPalette.Window, QColor(255, 255, 255))
-  palette.setColor(QPalette.WindowText, Qt.black)
-  palette.setColor(QPalette.Base, QColor(220, 220, 220))
-  palette.setColor(QPalette.AlternateBase, QColor(255, 255, 255))
-  palette.setColor(QPalette.ToolTipBase, Qt.black)
-  palette.setColor(QPalette.ToolTipText, Qt.black)
-  palette.setColor(QPalette.Text, Qt.black)
-  palette.setColor(QPalette.Button, QColor(255, 255, 255))
-  palette.setColor(QPalette.ButtonText, Qt.black)
-  palette.setColor(QPalette.BrightText, Qt.red)
-  palette.setColor(QPalette.Link, QColor(42, 130, 218))
-  palette.setColor(QPalette.Highlight, QColor(220, 220, 220))  #QColor(42, 130, 218)
-  palette.setColor(QPalette.HighlightedText, Qt.white)
-
-  app.setPalette(palette)
-
-  f = app.font()
-  f.setFamily('sans-serif')
-  f.setPointSize(12)
-  app.setFont(f)
-
   directory = os.path.dirname(os.path.realpath(__file__))
   
   with open(directory + '/style.qss', 'r') as file:
