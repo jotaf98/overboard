@@ -45,7 +45,7 @@ def show_visualizations(window, exp):
 
   # show the resulting figures
   plotsize = window.size_slider.value()
-  for fig in figs:
+  for fig in figures:
     if isinstance(fig, pg.PlotWidget):
       widget = fig
     else:

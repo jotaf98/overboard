@@ -1,4 +1,12 @@
 
+/* base style */
+
+QWidget {
+	background: white;
+	font-family: sans-serif;
+	font-size: 18px;
+}
+
 /*QSplitter::handle {
 	background: #A0A0A0;
 	border: 1px;
@@ -37,10 +45,6 @@ QSlider::handle:horizontal {
 
 /* for the table */
 
-QTableView {
-  border: none;
-}
-
 QHeaderView {
   background-color: white;
   /*font-weight: bold;*/
@@ -55,6 +59,15 @@ QHeaderView::section {
 	padding: 4px;
 }
 
+QHeaderView::item:selected {
+	font-weight: none;
+	background: red;
+}
+
+QTableView {
+  border: none;
+}
+
 QTableView::item {
 	border-right: 1px solid #EAEAF2;
 }
@@ -64,3 +77,6 @@ QTableWidget {
   background-color: white;
 }
 
+QTableWidget::item:selected {
+	background: #4C72B0;
+}
