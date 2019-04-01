@@ -112,13 +112,13 @@ class Window(QtWidgets.QMainWindow):
     self.setWindowTitle('OverBoard - ' + args.folder)
   
   def add_experiment(self, exp, refresh_table=True):
-    # add experiment to plots
-    self.plots.add(exp.enumerate_plots())
-    self.experiments[exp.name] = exp
-
     # ensure it has a style assigned, even if it has no plots
     if len(exp.style) == 0:
       (exp.style_order, exp.style) = next(self.plots.style_generator)
+
+    # add experiment to plots
+    self.plots.add(exp.enumerate_plots())
+    self.experiments[exp.name] = exp
 
     # add experiment to table
     (table, table_args) = (self.table, self.table_args)
@@ -222,19 +222,21 @@ class Window(QtWidgets.QMainWindow):
           # remove all associated plots
           self.plots.remove(exp.enumerate_plots())
 
-          # reset icon and style
+          # reset icon and style, allowing it to be used by other experiments
           item.setForeground(QColor(128, 128, 128))
           item.setText(u'\u2610')
-
-          self.plots.drop_style(exp.style_order, exp.style)  # allow it to be used by other experiments
+          self.plots.drop_style(exp.style_order, exp.style)
           exp.style = {}
         else:
-          # create plots, assigning new style
-          self.plots.add(exp.enumerate_plots())
-
-          # restore icon
+          # assign new style
+          if len(exp.style) == 0:
+            (exp.style_order, exp.style) = next(self.plots.style_generator)
+          
           item.setForeground(QColor(exp.style.get('color', "#808080")))
           item.setText(u'\u2611')
+
+          # create plots
+          self.plots.add(exp.enumerate_plots())
 
         exp.visible = not exp.visible
 

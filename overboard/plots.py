@@ -101,12 +101,8 @@ class Plots():
       exp = plot['exp']
       (xs, ys) = (exp.data[exp.names.index(plot['x'])], exp.data[exp.names.index(plot['y'])])
 
-      # get the plot style associated with this experiment
-      if len(exp.style) == 0:
-        (exp.style_order, exp.style) = next(self.style_generator)  # get a new style
-      style = exp.style
-
       # allow overriding the style
+      style = exp.style
       if 'color' in plots:
         style['color'] = plots['color']
       if 'width' in plots:
