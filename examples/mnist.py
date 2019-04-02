@@ -43,13 +43,9 @@ def train(args, model, device, train_loader, optimizer, epoch, logger):
     pred = output.max(1, keepdim=True)[1] # get the index of the max log-probability
     accuracy = pred.eq(target.view_as(pred)).double().mean()
     
-      # log the loss and accuracy
+    # log the loss and accuracy
     logger.update_average({'train.loss': loss.item(), 'train.accuracy': accuracy.item()})
-
-    if batch_idx % args.log_interval == 0:
-      # display values in console
-      avg = logger.average()
-      print(f"Train ep {epoch} ({batch_idx * len(data)}/{len(train_loader.dataset)}), loss: {avg['train.loss']:.3f}, acc: {avg['train.accuracy']*100:.1f}%")
+    logger.print(prefix='train')
 
 def test(args, model, device, test_loader, logger):
   model.eval()
@@ -66,8 +62,7 @@ def test(args, model, device, test_loader, logger):
       logger.update_average({'val.loss': loss.item(), 'val.accuracy': accuracy.item()})
 
   # display final values in console
-  avg = logger.average()
-  print(f"Val loss: {avg['val.loss']:.3f}, acc: {avg['val.accuracy']*100:.1f}%")
+  logger.print(prefix='val')
 
 def main():
   # Training settings
@@ -87,8 +82,6 @@ def main():
             help='disables CUDA training')
   parser.add_argument('--seed', type=int, default=1, metavar='S',
             help='random seed (default: 1)')
-  parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-            help='how many batches to wait before logging training status')
   parser.add_argument('--datadir', type=str, default='/data/mnist/',
             help='MNIST data directory')
   parser.add_argument('--outputdir', type=str, default='/data/mnist-experiments/',
@@ -120,11 +113,8 @@ def main():
   model = Net().to(device)
   optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
 
-  # specify the logged statistics names, e.g. "train.loss"
-  stat_names = [phase + '.' + stat for stat in ('loss', 'accuracy') for phase in ('train', 'val')]
-
   # open logging stream
-  with Logger(args.outputdir, stat_names, args) as logger:
+  with Logger(args.outputdir, meta=args) as logger:
     # do training
     for epoch in range(1, args.epochs + 1):
       train(args, model, device, train_loader, optimizer, epoch, logger)
