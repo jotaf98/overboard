@@ -121,8 +121,7 @@ class Window(QtWidgets.QMainWindow):
   
   def add_experiment(self, exp, refresh_table=True):
     # ensure it has a style assigned, even if it has no plots
-    if len(exp.style) == 0:
-      (exp.style_order, exp.style) = next(self.plots.style_generator)
+    (exp.style_order, exp.style) = self.plots.get_style()
 
     # add experiment to plots
     self.plots.add(exp.enumerate_plots())
@@ -241,8 +240,7 @@ class Window(QtWidgets.QMainWindow):
           exp.style = {}
         else:
           # assign new style
-          if len(exp.style) == 0:
-            (exp.style_order, exp.style) = next(self.plots.style_generator)
+          (exp.style_order, exp.style) = self.plots.get_style()
           
           item.setForeground(QColor(exp.style.get('color', "#808080")))
           item.setText(u'\u2611')
