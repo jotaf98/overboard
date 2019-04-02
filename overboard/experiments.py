@@ -23,9 +23,9 @@ class Experiment():
 
     self.read_data = None
     self.visible = True
+    self.is_selected = False
     self.style = {}  # used by Plots
     self.style_order = 1000
-    self._plots = []
 
     # do first read
     self.read_data = self.read_data_generator()
@@ -65,11 +65,14 @@ class Experiment():
 
   def enumerate_plots(self):
     # return list of plots and where/how to draw them, could be user-configured
-    if len(self.names) == 0:
-      return []
-    else:
-      x_name = self.names[0]
-      return [{'panel': y_name, 'line': self.name, 'x': x_name, 'y': y_name, 'exp': self} for y_name in self.names[1:]]
+    return [{
+      'panel': y_name,
+      'line': self.name,
+      'x': self.names[0],
+      'y': y_name,
+      'exp': self,
+      'width': 4 if self.is_selected else 2
+    } for y_name in self.names[1:]]
 
 
 class Smoother():

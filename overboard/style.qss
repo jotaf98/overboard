@@ -75,8 +75,11 @@ QTableView::item {
 QTableWidget {
   alternate-background-color: #EAEAF2;
   background-color: white;
+
+	selection-color: white;
+	selection-background-color: #4C72B0;
 }
 
-QTableWidget::item:selected {
-	background: #4C72B0;
+QTableView::item:selected:!active {  /* note: doesn't seem to work */
+	selection-background-color: #4C72B0;
 }

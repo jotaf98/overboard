@@ -103,12 +103,12 @@ class Plots():
 
       # allow overriding the style
       style = exp.style
-      if 'color' in plots:
-        style['color'] = plots['color']
-      if 'width' in plots:
-        style['width'] = plots['width']
-      if 'dash' in plots and plots['dash'] in dashes_by_name:
-        style['style'] = dashes_by_name[plots['dash']]
+      if 'color' in plot:
+        style['color'] = plot['color']
+      if 'width' in plot:
+        style['width'] = plot['width']
+      if 'dash' in plot and plot['dash'] in dashes_by_name:
+        style['style'] = dashes_by_name[plot['dash']]
       
       try:
         pen = pg.mkPen(style)
@@ -124,7 +124,6 @@ class Plots():
         line.mouse_over = False
         
         widget.plots_dict[plot['line']] = line
-        exp._plots.append(line)  # register in experiment (to toggle visibility)
       else:
         # update existing one
         line = widget.plots_dict[plot['line']]
@@ -175,7 +174,7 @@ def mouse_move(event, widget):
         # change line style to thicker
         line.original_pen = line.opts['pen']
         pen = pg.mkPen(line.original_pen)
-        pen.setWidth(3)
+        pen.setWidthF(line.original_pen.widthF() + 2)
         line.setPen(pen)
 
         # bring it to the front
