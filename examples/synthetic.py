@@ -6,6 +6,8 @@ import sys, math, random, time
 from overboard import Logger
 
 print("Open OverBoard in another terminal: python3 -m overboard ./logs")
+print("Then press Enter here to start logging.")
+input()
 
 # pretend that there are 10 runs/experiments
 for run in range(10):
@@ -18,11 +20,8 @@ for run in range(10):
   args = {'phase': phase, 'amplitude': amp}
   print("Starting run", run, args)
 
-  # outputs of each experiment (e.g. loss function, error)
-  output_names = ['sine', 'cosine']
-
   # open file for logging
-  with Logger(directory, output_names, args) as logger:
+  with Logger(directory, meta=args) as logger:
     # simulate a few iterations
     for iteration in range(100):
       # obtain output values

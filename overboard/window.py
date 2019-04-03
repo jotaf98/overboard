@@ -72,7 +72,11 @@ class Window(QtWidgets.QMainWindow):
     # table style
     table.setShowGrid(False)
     table.setAlternatingRowColors(True)
-    table.setFocusPolicy(Qt.NoFocus);  # disable item selection
+
+    #table.setFocusPolicy(Qt.NoFocus)
+    table.setSelectionBehavior(QtWidgets.QTableView.SelectRows)  # allow selecting rows
+    table.setSelectionMode(QtWidgets.QTableView.ExtendedSelection)
+
     table.setHorizontalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)  # smooth scrolling
     table.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)
     
@@ -83,13 +87,17 @@ class Window(QtWidgets.QMainWindow):
     header.setDefaultAlignment(Qt.AlignLeft)
     header.setSectionsMovable(True)
     header.setTextElideMode(Qt.ElideRight)  # show ellipsis for cut-off headers
+    header.setHighlightSections(False)  # no bold header when cells are clicked
 
     table.itemClicked.connect(self.table_click)
+    table.itemSelectionChanged.connect(self.table_select)
 
     sidebar.addWidget(table)
     self.table = table
     self.table_args = {}  # maps argument names to column indices
+    #self.table_exps = {}  # maps experiment names to rows as table_exps[name].row() (even as it's sorted)
     self.prev_sort = None
+    self.selected_exp = None
 
     # create the scroll area with plots
     (plot_scroll_widget, plot_scroll_area) = create_scroller()
@@ -113,8 +121,7 @@ class Window(QtWidgets.QMainWindow):
   
   def add_experiment(self, exp, refresh_table=True):
     # ensure it has a style assigned, even if it has no plots
-    if len(exp.style) == 0:
-      (exp.style_order, exp.style) = next(self.plots.style_generator)
+    (exp.style_order, exp.style) = self.plots.get_style()
 
     # add experiment to plots
     self.plots.add(exp.enumerate_plots())
@@ -132,17 +139,18 @@ class Window(QtWidgets.QMainWindow):
     row = table.rowCount()
     table.insertRow(row)
 
+    # persistent mapping between an experiment and its row (even as they're sorted)
+    #self.table_exps[exp.name] = QtCore.QPersistentModelIndex(table.model().index(row, 0))
+
     # create icon (label with unicode symbol) with the plot color. u'\u2611 \u2610'
-    icon = self.set_table_cell(row, 0, u'\u2611')
+    icon = self.set_table_cell(row, 0, u'\u2611', selectable=False)
     icon.setForeground(QColor(exp.style.get('color', '#808080')))
     # store experiment name with icon, to be retrieved later in table_click
     icon.setData(Qt.UserRole, 'hide')
     icon.setData(Qt.UserRole + 1, exp.name)
 
     # experiment name
-    label = self.set_table_cell(row, 1, exp.name)
-    label.setData(Qt.UserRole, 'select')
-    label.setData(Qt.UserRole + 1, exp.name)
+    self.set_table_cell(row, 1, exp.name)
 
     # print a row of argument values for this experiment
     for arg_name in exp.meta.keys():
@@ -160,7 +168,7 @@ class Window(QtWidgets.QMainWindow):
     if refresh_table:
       self.refresh_table()
   
-  def set_table_cell(self, row, col, value):
+  def set_table_cell(self, row, col, value, selectable=True):
     # helper to set a single table cell in the sidebar.
     # try to interpret as integer or float, to allow numeric sorting of columns
     if not isinstance(value, int) and not isinstance(value, float):
@@ -177,7 +185,10 @@ class Window(QtWidgets.QMainWindow):
       item = QtWidgets.QTableWidgetItem()
       item.setData(Qt.EditRole, QtCore.QVariant(value))
 
-    item.setFlags(Qt.ItemIsEnabled)  # set not editable
+    flags = Qt.ItemIsEnabled  # set not editable
+    if selectable:
+      flags = flags | Qt.ItemIsSelectable
+    item.setFlags(flags)
     self.table.setItem(row, col, item)
     return item
 
@@ -229,8 +240,7 @@ class Window(QtWidgets.QMainWindow):
           exp.style = {}
         else:
           # assign new style
-          if len(exp.style) == 0:
-            (exp.style_order, exp.style) = next(self.plots.style_generator)
+          (exp.style_order, exp.style) = self.plots.get_style()
           
           item.setForeground(QColor(exp.style.get('color', "#808080")))
           item.setText(u'\u2611')
@@ -240,10 +250,33 @@ class Window(QtWidgets.QMainWindow):
 
         exp.visible = not exp.visible
 
-      elif action == 'select':
-        # show visualizations for a given experiment
-        show_visualizations(self, exp)
+  def table_select(self):
+    # selection changed
+    items = self.table.selectedItems()
+    if items:  # get associated experiment
+      exp = self.row_to_experiment(items[0].row())
+    else:
+      exp = None
 
+    # unselect previous experiment first
+    if self.selected_exp and self.selected_exp != exp:
+      self.selected_exp.is_selected = False
+      if self.selected_exp.visible:  # update its view
+        self.plots.add(self.selected_exp.enumerate_plots())
+
+    if items:  # select new one
+      exp.is_selected = True
+      self.plots.add(exp.enumerate_plots())
+      self.selected_exp = exp
+    else:
+      self.selected_exp = None
+
+  def row_to_experiment(self, row):
+    # check left-most cell of the given row to get the associated experiment name
+    leftmost = self.table.item(row, 0)
+    name = leftmost.data(Qt.UserRole + 1)
+    return self.experiments[name]
+  
   def size_slider_changed(self):
     # resize plots and visualizations
     plotsize = self.size_slider.value()

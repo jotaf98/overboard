@@ -30,27 +30,25 @@ class Plots():
 
     self.panels = {}
     self.unused_styles = []
-    self.style_generator = self.style_generator()
+    self.next_style_index = 0
 
     pg.setConfigOptions(antialias=True, background='w', foreground='k')
-  
-  def style_generator(self):
-    # generate combinations of styles
-    styles = ({'color': color, 'style': dash, 'width': width}
-      for (width, dash, color) in product(widths, dashes, palette))
+
+  def get_style(self):
+    # reuse a previous style if possible, in order
+    if len(self.unused_styles) > 0:
+      return heapq.heappop(self.unused_styles)
     
-    # cycle if the list is exhausted, and append a count (style_order) to each entry to enable sorting
-    styles = zip(count(0), cycle(styles))
+    # otherwise, get a new one
+    idx = self.next_style_index
+    color = palette[idx % len(palette)]
+    dash = dashes[(idx // len(palette)) % len(dashes)]
+    width = widths[(idx // (len(palette) * len(dashes))) % len(widths)]
 
-    while True:
-      # get an unused style if possible, using the lowest-index one
-      if len(self.unused_styles) > 0:
-        (style_order, style) = heapq.heappop(self.unused_styles)
-      else:
-        # get another default style
-        (style_order, style) = next(styles)
-      yield (style_order, style)
+    self.next_style_index = idx + 1
 
+    return (idx, {'color': color, 'style': dash, 'width': width})
+  
   def drop_style(self, style_order, style):
     # return a style to the set of available ones
     heapq.heappush(self.unused_styles, (style_order, style))
@@ -103,12 +101,12 @@ class Plots():
 
       # allow overriding the style
       style = exp.style
-      if 'color' in plots:
-        style['color'] = plots['color']
-      if 'width' in plots:
-        style['width'] = plots['width']
-      if 'dash' in plots and plots['dash'] in dashes_by_name:
-        style['style'] = dashes_by_name[plots['dash']]
+      if 'color' in plot:
+        style['color'] = plot['color']
+      if 'width' in plot:
+        style['width'] = plot['width']
+      if 'dash' in plot and plot['dash'] in dashes_by_name:
+        style['style'] = dashes_by_name[plot['dash']]
       
       try:
         pen = pg.mkPen(style)
@@ -124,7 +122,6 @@ class Plots():
         line.mouse_over = False
         
         widget.plots_dict[plot['line']] = line
-        exp._plots.append(line)  # register in experiment (to toggle visibility)
       else:
         # update existing one
         line = widget.plots_dict[plot['line']]
@@ -175,7 +172,7 @@ def mouse_move(event, widget):
         # change line style to thicker
         line.original_pen = line.opts['pen']
         pen = pg.mkPen(line.original_pen)
-        pen.setWidth(3)
+        pen.setWidthF(line.original_pen.widthF() + 2)
         line.setPen(pen)
 
         # bring it to the front

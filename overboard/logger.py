@@ -12,13 +12,14 @@ except ImportError:
 
 
 class Logger:
-  def __init__(self, directory, stat_names, meta=None, index_name="iteration", save_timestamp=True):
-    """Initialize log writer on a new directory, with the given list of statistics names.
+  def __init__(self, directory, stat_names=None, meta=None, index_name="iteration", save_timestamp=True):
+    """Initialize log writer on a new directory.
        The main file that is written is "stats.csv", containing one column for each stat."""
-    assert(all(isinstance(name, str) and not ',' in name for name in stat_names))
+    if stat_names and not (all(isinstance(name, str) and not ',' in name for name in stat_names)):
+      raise ValueError('stat_names must be a list of strings with no commas, if specified.')
     self.file = None
     self.directory = directory
-    self.stat_names = stat_names
+    self.stat_names = stat_names  # can be omitted (will be set on first append() call)
     self.index_name = index_name
     self.count = 0
 
@@ -39,7 +40,6 @@ class Logger:
     self.save_timestamp = save_timestamp
     self.vis_functions = {}
 
-  def __enter__(self):
     # create directory if it doesn't exist
     os.makedirs(self.directory, exist_ok=True)
 
@@ -48,31 +48,10 @@ class Logger:
       self.meta['timestamp'] = str(datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0))
     
     # write arguments to JSON file
-    self.save_meta()
+    self._save_meta()
 
-    # open CSV file and write header
-    self.file = open(self.directory + '/stats.csv', 'w')
-    self.file.write(self.index_name + ',' + ','.join(self.stat_names) + '\n')  # header
-    return self
-
-  def __exit__(self, exc_type, exc_value, traceback):
-    # close CSV file
-    self.file.close()
-    self.file = None
-
-    # mark experiment as done, and write to JSON file
-    self.meta['_done'] = True
-    self.save_meta()
-  
-  def save_meta(self):
-    # write metadata to JSON file
-    with open(self.directory + '/meta.json', 'w') as file:
-      json.dump(self.meta, file)
-  
   def append(self, points=None):
     """Write the given stats dict to CSV file. If none is given, the average values computed so far are used (see update_average)."""
-    if self.file is None:
-      raise AssertionError('Can only call logger.append() from within a "with Logger(...) as logger:" enclosure.')
 
     if points is None:
       # use computed average, and reset accumulator
@@ -80,8 +59,16 @@ class Logger:
       self.avg_accum = {}
       self.avg_count = {}
 
-    for name in points.keys():
-      assert name in self.stat_names, 'Unknown stat name: ' + name
+    if self.stat_names is None:  # assume the given stats are all there is
+      self.stat_names = list(points.keys())
+
+    else:  # validate them
+      for name in points.keys():
+        if name not in self.stat_names:
+          raise ValueError('Unknown stat name: ' + name + '. Note that no new stats can be added after the first Logger.append call. Alternatively, they can be specified in the constructor.')
+
+    if self.file is None:
+      self._start_write()
 
     # first element is always the iteration
     self.count += 1
@@ -152,8 +139,44 @@ class Logger:
 
       # register also in the metadata (JSON file)
       self.meta['vis'].append(name)
-      self.save_meta()
+      self._save_meta()
 
     # pickle the function and arguments
     data = {'func': func.__name__, 'source': source_file, 'args': args, 'kwargs': kwargs}
     save(data, self.directory + '/' + name + '.pth')
+
+
+  # note about "with" statement/destructors:
+  # this class can be used either with a "with" statement, or without.
+  # the first is preferred in Python, but the second is still ok in this case for two reasons:
+  # 1) circular references that prevent __del__ from being called shouldn't happen
+  # 2) even if they do, append() always flushes the buffer so there's no delay, and the file
+  #    will be closed anyway once the process exits.
+  def __enter__(self):
+    return self
+  def __exit__(self, exc_type, exc_value, traceback):
+    self._finish_write()
+  def __del__(self):
+    self._finish_write()
+
+  def _start_write(self):
+    # open CSV file and write header
+    self.file = open(self.directory + '/stats.csv', 'w')
+    self.file.write(self.index_name + ',' + ','.join(self.stat_names) + '\n')  # header
+  
+  def _finish_write(self):
+    # close CSV file
+    if self.file is not None:
+      self.file.close()
+      self.file = None
+
+    # mark experiment as done, and write to JSON file
+    if not self.meta['_done']:
+      self.meta['_done'] = True
+      self._save_meta()
+
+  def _save_meta(self):
+    # write metadata to JSON file
+    with open(self.directory + '/meta.json', 'w') as file:
+      json.dump(self.meta, file)
+  

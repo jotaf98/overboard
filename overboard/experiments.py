@@ -1,10 +1,11 @@
-import os, collections, json, glob, re
+import collections, json, glob, re
 import numpy as np
+from os import path as os_path
 
 class Experiment():
-  def __init__(self, filename, base_folder):
-    directory = os.path.dirname(filename)
-    self.name = os.path.relpath(directory, base_folder)  # experiment name is the path relative to base folder
+  def __init__(self, filename, base_folder, force_reopen_files):
+    directory = os_path.dirname(filename)
+    self.name = os_path.relpath(directory, base_folder)  # experiment name is the path relative to base folder
     self.filename = filename
     self.directory = directory
 
@@ -23,53 +24,86 @@ class Experiment():
 
     self.read_data = None
     self.visible = True
+    self.is_selected = False
     self.style = {}  # used by Plots
     self.style_order = 1000
-    self._plots = []
 
     # do first read
-    self.read_data = self.read_data_generator()
+    self.read_data = self.read_data_slow() if force_reopen_files else self.read_data_fast()
     try:
       next(self.read_data)
     except StopIteration:
       pass
   
-  def read_data_generator(self):  # generator function
-    # open CSV file with stat data
+  def read_data_fast(self):  # generator function
+    # polls the file for new data, bu keeps the file handle open
     with open(self.filename, 'r') as file:
       has_new_data = False
 
       while True:
-        # try to read new line
-        where = file.tell()  # need to restore file pointer when there's no new line to read, to cope with bug while file is being written to
-        line = file.readline()
-
-        if line:
-          if len(self.names) == 0:
-            # read CSV file header (with stat names). they're separated by commas, which can be escaped: \,
-            self.names = re.split(r'(?<!\\),', line.strip())
-            self.data = [[] for _ in range(len(self.names))]
-          else:
-            # read line of stat values
-            values = line.split(',')
-
-            for i in range(len(values)):  # read one value per column
-              self.data[i].append(float(values[i]))
-
-            has_new_data = True
+        # try to read new line. need to restore read position when there's no new
+        # line to read, to cope with incomplete lines (while they're being written)
+        where = file.tell()
+        if self.read_single_line(file):
+          has_new_data = True  # keep reading
         else:
           if self.done: return
           yield has_new_data
+
           has_new_data = False
           file.seek(where)  # back to beginning of line
 
+  def read_data_slow(self):  # generator function
+    # initial read
+    with open(self.filename, 'r') as file:
+      while self.read_single_line(file):
+        pass
+      where = file.tell()  # position for next read
+    
+    # detect when file size changes (note file handle is closed most of the time)
+    old_size = 0
+    while not self.done:
+      new_size = os_path.getsize(self.filename)
+      file_changed = (new_size != old_size)
+      old_size = new_size
+
+      if file_changed:
+        # get new data from the file, picking up where we left off. don't use file size, depends on OS.
+        with open(self.filename, 'r') as file:
+          file.seek(where)
+          while self.read_single_line(file):
+            pass
+          where = file.tell()  # remember where we left off for next time
+
+      yield file_changed
+
+  def read_single_line(self, file):
+    line = file.readline()
+    if line:
+      if len(self.names) == 0:
+        # read CSV file header (with stat names). they're separated by commas, which can be escaped: \,
+        self.names = re.split(r'(?<!\\),', line.strip())
+        self.data = [[] for _ in range(len(self.names))]
+      else:
+        # read line of stat values
+        values = line.split(',')
+
+        for i in range(len(values)):  # read one value per column
+          self.data[i].append(float(values[i]))
+
+      return True
+    return False
+
   def enumerate_plots(self):
     # return list of plots and where/how to draw them, could be user-configured
-    if len(self.names) == 0:
-      return []
-    else:
-      x_name = self.names[0]
-      return [{'panel': y_name, 'line': self.name, 'x': x_name, 'y': y_name, 'exp': self} for y_name in self.names[1:]]
+    return [{
+      'panel': y_name,
+      'line': self.name,
+      'x': self.names[0],
+      'y': y_name,
+      'exp': self,
+      'width': 4 if self.is_selected else 2
+    } for y_name in self.names[1:]]
 
 
 class Smoother():
@@ -95,14 +129,14 @@ class Smoother():
     return y
 
 
-def check_new_experiments(experiments, files_before, base_folder, window):
+def check_new_experiments(experiments, files_before, base_folder, window, force_reopen_files):
   # find experiment files
   files_now = set(glob.glob(base_folder + "/**/stats.csv", recursive=True))
 
   # add new ones
   new_files = files_now - files_before
   for filename in new_files:
-    exp = Experiment(filename, base_folder)
+    exp = Experiment(filename, base_folder, force_reopen_files)
     experiments.append(exp)
     window.add_experiment(exp, refresh_table=False)
 
