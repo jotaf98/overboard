@@ -25,13 +25,14 @@ def main():
   #parser.add_argument("-dpi", default=100, type=int)
   parser.add_argument("-plotsize", default=0, type=float)
   #parser.add_argument("-smoothen", default=0, type=float)
+  parser.add_argument('--force-reopen-files', action='store_true', default=False)
   args = parser.parse_args()
   
   # find experiment files
   files = glob.glob(args.folder + "/**/stats.csv", recursive=True)
 
   # load the experiments
-  experiments = [Experiment(filename, args.folder) for filename in files]
+  experiments = [Experiment(filename, args.folder, args.force_reopen_files) for filename in files]
 
   # create Qt application
   app = QtWidgets.QApplication(sys.argv)
@@ -52,7 +53,7 @@ def main():
   
   # create timer to check for new experiments
   new_exp_timer = QtCore.QTimer()
-  new_exp_timer.timeout.connect(partial(check_new_experiments, experiments, set(files), args.folder, window))
+  new_exp_timer.timeout.connect(partial(check_new_experiments, experiments, set(files), args.folder, window, args.force_reopen_files))
   new_exp_timer.start(3900)
 
   window.show()
