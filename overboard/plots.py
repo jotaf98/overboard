@@ -28,18 +28,18 @@ class Plots():
     self.window = window
     window.plots = self  # back-reference
 
-    self.panels = {}
-    self.unused_styles = []
+    self.panels = {}  # widgets containing plots, indexed by name (usually the plot title at the top)
+    self.unused_styles = []  # reuse styles from hidden experiments. this is a heap so early styles have priority.
     self.next_style_index = 0
 
-    pg.setConfigOptions(antialias=True, background='w', foreground='k')
+    pg.setConfigOptions(antialias=True, background='w', foreground='k')  # black on white
 
   def get_style(self):
     # reuse a previous style if possible, in order
     if len(self.unused_styles) > 0:
       return heapq.heappop(self.unused_styles)
     
-    # otherwise, get a new one
+    # otherwise, get a new one. start by varying color, then dashes, then line width.
     idx = self.next_style_index
     color = palette[idx % len(palette)]
     dash = dashes[(idx // len(palette)) % len(dashes)]

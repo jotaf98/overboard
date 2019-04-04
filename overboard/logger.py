@@ -116,6 +116,10 @@ class Logger:
     else:
       print(text)
   
+  def tensor(self, name, tensor):
+    """Store a tensor for visualization, with a unique name."""
+    self.vis(name, 'tensor', tensor)
+
   def vis(self, name, func, *args, **kwargs):
     """Store a visualization function call, with a unique name.
     OverBoard will call the given function with the name as argument, plus the given arguments and keyword arguments.
@@ -128,13 +132,18 @@ class Logger:
         raise ValueError("Attempting to register a different visualization function under a previously used name.")
       source_file = info['source']
     else:
-      # new function. copy function source file to freeze changes in visualization code
-      source_file = inspect.getsourcefile(func)  # python source for function
-      if not source_file or func.__name__ == '<lambda>':
-        raise ValueError("Only visualization functions defined at the top-level of a script are supported.")
-      shutil.copy(source_file, self.directory + '/' + name + '.py')
+      # it's new
+      if func == 'tensor':
+        # built-in functions, like the tensor visualization
+        source_file = 'builtin'
+      else:
+        # user function. copy function source file to freeze changes in visualization code
+        source_file = inspect.getsourcefile(func)  # python source for function
+        if not source_file or func.__name__ == '<lambda>':
+          raise ValueError("Only visualization functions defined at the top-level of a script are supported.")
+        shutil.copy(source_file, self.directory + '/' + name + '.py')
 
-      # register visualization function for quick look-up
+      # register visualization function for quick look-up next time this is called
       self.vis_functions[name] = {'func': func, 'source': source_file}
 
       # register also in the metadata (JSON file)
@@ -142,7 +151,8 @@ class Logger:
       self._save_meta()
 
     # pickle the function and arguments
-    data = {'func': func.__name__, 'source': source_file, 'args': args, 'kwargs': kwargs}
+    func_name = func if isinstance(func, str) else func.__name__
+    data = {'func': func_name, 'source': source_file, 'args': args, 'kwargs': kwargs}
     save(data, self.directory + '/' + name + '.pth')
 
 

@@ -34,6 +34,7 @@ class Net(nn.Module):
 
 def train(args, model, device, train_loader, optimizer, epoch, logger):
   model.train()
+  first = True
   for batch_idx, (data, target) in enumerate(train_loader):
     data, target = data.to(device), target.to(device)
     optimizer.zero_grad()
@@ -48,6 +49,10 @@ def train(args, model, device, train_loader, optimizer, epoch, logger):
     # log the loss and accuracy
     logger.update_average({'train.loss': loss.item(), 'train.accuracy': accuracy.item()})
     logger.print(prefix='train')
+
+    if first:
+      first = False
+      logger.tensor('images', data)
 
 def test(args, model, device, test_loader, logger):
   model.eval()

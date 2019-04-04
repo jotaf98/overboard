@@ -16,6 +16,7 @@ QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
 from .window import Window, set_style
 from .experiments import Experiment, check_new_experiments
 from .plots import Plots
+from .visualizations import Visualizations
 
 
 def main():
@@ -38,9 +39,10 @@ def main():
   app = QtWidgets.QApplication(sys.argv)
   set_style(app)
 
-  # create window and plots holder
+  # create window and plots holders
   window = Window(args)
   plots = Plots(window)
+  visualizations = Visualizations(window)
 
   # create initial plots for all the experiments
   for exp in experiments:
@@ -49,12 +51,17 @@ def main():
   # create timer for updating the plots periodically if needed
   plot_timer = QtCore.QTimer()
   plot_timer.timeout.connect(partial(plots.update_plots, experiments))
-  plot_timer.start(2000)
+  plot_timer.start(1999)
   
   # create timer to check for new experiments
   new_exp_timer = QtCore.QTimer()
   new_exp_timer.timeout.connect(partial(check_new_experiments, experiments, set(files), args.folder, window, args.force_reopen_files))
-  new_exp_timer.start(3900)
+  new_exp_timer.start(3999)
+  
+  # create timer for updating the current visualizations
+  vis_timer = QtCore.QTimer()
+  vis_timer.timeout.connect(visualizations.update)
+  vis_timer.start(2999)
 
   window.show()
   
