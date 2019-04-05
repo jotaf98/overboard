@@ -155,7 +155,7 @@ class Plots():
           if not exp.done and next(exp.read_data):  # check if there's new data in the file
             self.add(exp.enumerate_plots())  # update plots
         except IOError as err:
-          warnings.warn('Error reading ' + self.filename + ':\n' + repr(err))
+          warnings.warn('Error reading ' + exp.filename + ':\n' + repr(err))
 
 
 def mouse_move(event, box):
