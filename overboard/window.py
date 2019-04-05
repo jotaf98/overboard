@@ -40,7 +40,7 @@ class Window(QtWidgets.QMainWindow):
     # plot size slider
     plotsize = args.plotsize
     if plotsize == 0:
-      plotsize = screen_size.width() * 0.1
+      plotsize = screen_size.width() * 0.2
     sidebar.addWidget(QtWidgets.QLabel('Plot size'))
     slider = Slider(Qt.Horizontal)  #QtWidgets.QSlider(Qt.Horizontal)
     slider.setMinimum(screen_size.width() * 0.05)
