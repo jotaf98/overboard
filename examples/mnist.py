@@ -11,6 +11,8 @@ from torchvision import datasets, transforms
 
 from overboard import Logger
 
+import mnist_visualization
+
 
 class Net(nn.Module):
   def __init__(self):
@@ -46,6 +48,14 @@ def train(args, model, device, train_loader, optimizer, epoch, logger):
     # log the loss and accuracy
     logger.update_average({'train.loss': loss.item(), 'train.accuracy': accuracy.item()})
     logger.print(prefix='train')
+
+    if logger.rate_limit(seconds=5):
+      # show the images once in a while
+      logger.tensor('images', data, grayscale=True)
+
+      # also show conv1's filters
+      parameters = dict(model.named_parameters())
+      logger.tensor('conv1', parameters['conv1.weight'])
 
 def test(args, model, device, test_loader, logger):
   model.eval()

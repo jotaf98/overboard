@@ -14,7 +14,6 @@ import os
 
 from .flowlayout import FlowLayout
 from .fastslider import Slider
-from .visualizations import show_visualizations
 from .experiments import Smoother
 
 
@@ -23,8 +22,8 @@ class Window(QtWidgets.QMainWindow):
     super(Window, self).__init__(parent=None)
     
     self.experiments = {}  # filled in later
-    self.plots = None  # standard stats plots
-    self.visualizations = []  # custom visualization
+    self.plots = None  # object that manages plots
+    self.visualizations = None  # object that manages custom visualizations
 
     # get screen size
     screen_size = QtWidgets.QDesktopWidget().availableGeometry(self).size()
@@ -41,7 +40,7 @@ class Window(QtWidgets.QMainWindow):
     # plot size slider
     plotsize = args.plotsize
     if plotsize == 0:
-      plotsize = screen_size.width() * 0.1
+      plotsize = screen_size.width() * 0.2
     sidebar.addWidget(QtWidgets.QLabel('Plot size'))
     slider = Slider(Qt.Horizontal)  #QtWidgets.QSlider(Qt.Horizontal)
     slider.setMinimum(screen_size.width() * 0.05)
@@ -268,8 +267,10 @@ class Window(QtWidgets.QMainWindow):
       exp.is_selected = True
       self.plots.add(exp.enumerate_plots())
       self.selected_exp = exp
+      self.visualizations.select(exp)
     else:
       self.selected_exp = None
+      self.visualizations.select(None)
 
   def row_to_experiment(self, row):
     # check left-most cell of the given row to get the associated experiment name
@@ -283,9 +284,10 @@ class Window(QtWidgets.QMainWindow):
     for panel in self.plots.panels.values():
       panel.setFixedWidth(plotsize)
       panel.setFixedHeight(plotsize)
-    for panel in self.visualizations:
-      panel.setFixedWidth(plotsize)
-      panel.setFixedHeight(plotsize)
+    for panel_group in self.visualizations.panels.values():
+      for panel in panel_group:
+        panel.setFixedWidth(plotsize)
+        panel.setFixedHeight(plotsize)
   
   def smooth_slider_changed(self):
     self.smoother = Smoother(self.smooth_slider.value() / 4.0)

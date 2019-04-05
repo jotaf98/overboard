@@ -9,7 +9,7 @@ import PyQt5.QtGui as QtGui
 
 from itertools import product, cycle, count
 from functools import partial
-import heapq
+import heapq, warnings
 import numpy as np
 
 import pyqtgraph as pg
@@ -28,18 +28,18 @@ class Plots():
     self.window = window
     window.plots = self  # back-reference
 
-    self.panels = {}
-    self.unused_styles = []
+    self.panels = {}  # widgets containing plots, indexed by name (usually the plot title at the top)
+    self.unused_styles = []  # reuse styles from hidden experiments. this is a heap so early styles have priority.
     self.next_style_index = 0
 
-    pg.setConfigOptions(antialias=True, background='w', foreground='k')
+    pg.setConfigOptions(antialias=True, background='w', foreground='k')  # black on white
 
   def get_style(self):
     # reuse a previous style if possible, in order
     if len(self.unused_styles) > 0:
       return heapq.heappop(self.unused_styles)
     
-    # otherwise, get a new one
+    # otherwise, get a new one. start by varying color, then dashes, then line width.
     idx = self.next_style_index
     color = palette[idx % len(palette)]
     dash = dashes[(idx // len(palette)) % len(dashes)]
@@ -59,41 +59,41 @@ class Plots():
     for plot in plots:
       # check if panel exists. there's a different panel for each x coordinate (e.g. iterations, time)
       panel_id = (plot['panel'], plot['x'])
-      if panel_id not in self.panels:  # create new panel
-        widget = create_plot_widget()
-
+      if panel_id not in self.panels:
+        # create new panel to contain plot.
+        # if title not defined, use the panel ID (e.g. stat name)
+        title = str(plot.get('title', plot['panel']))
+        (plot_widget, box) = create_plot_widget(title)
+        
         # set size based on size slider
         if plotsize is None:
           plotsize = self.window.size_slider.value()
-        widget.setFixedWidth(plotsize)
-        widget.setFixedHeight(plotsize)
+        box.setFixedWidth(plotsize)
+        box.setFixedHeight(plotsize)
 
-        self.window.flow_layout.addWidget(widget)  # add to window's flow layout
+        self.window.flow_layout.addWidget(box)  # add to window's flow layout
 
-        # if title not defined, use the panel ID (e.g. stat name)
-        widget.setTitle(str(plot.get('title', plot['panel'])))
-
-        widget.plots_dict = {}
+        box.plots_dict = {}
         
         # set up mouse move event
-        widget.mouseMoveEvent = partial(mouse_move, widget=widget)
-        widget.leaveEvent = partial(mouse_leave, widget=widget)
+        plot_widget.mouseMoveEvent = partial(mouse_move, box=box)
+        plot_widget.leaveEvent = partial(mouse_leave, box=box)
 
         # mouse cursor (vertical line)
         vline = pg.InfiniteLine(angle=90, pen="#B0B0B0")
         vline.setVisible(False)
-        widget.getPlotItem().addItem(vline, ignoreBounds=True)  # ensure it doesn't mess autorange
-        widget.cursor_vline = vline
+        plot_widget.getPlotItem().addItem(vline, ignoreBounds=True)  # ensure it doesn't mess autorange
+        box.cursor_vline = vline
 
         # mouse cursor text
         label = pg.LabelItem(justify='left')
-        label.setParentItem(widget.getPlotItem().getViewBox())
+        label.setParentItem(plot_widget.getPlotItem().getViewBox())
         label.anchor(itemPos=(0, 0), parentPos=(0, 0))
-        widget.cursor_label = label
+        box.cursor_label = label
 
-        self.panels[panel_id] = widget
+        self.panels[panel_id] = box
       else:
-        widget = self.panels[panel_id]  # reuse existing panel
+        box = self.panels[panel_id]  # reuse existing panel
       
       # get data points
       exp = plot['exp']
@@ -114,17 +114,17 @@ class Plots():
         pen = pg.mkPen(exp.style)
       
       # check if plot line already exists
-      if plot['line'] not in widget.plots_dict:
+      if plot['line'] not in box.plots_dict:
         # create new line
-        line = widget.getPlotItem().plot(xs, ys, pen=pen)
+        line = box.plot_widget.getPlotItem().plot(xs, ys, pen=pen)
         
         line.curve.setClickable(True, 8)  # size of hover region
         line.mouse_over = False
         
-        widget.plots_dict[plot['line']] = line
+        box.plots_dict[plot['line']] = line
       else:
         # update existing one
-        line = widget.plots_dict[plot['line']]
+        line = box.plots_dict[plot['line']]
         line.setData(xs, ys)
         line.setPen(pen)
   
@@ -133,36 +133,38 @@ class Plots():
       # find panel
       panel_id = (plot['panel'], plot['x'])
       if panel_id in self.panels:
-        widget = self.panels[panel_id]
+        box = self.panels[panel_id]
 
         # find plot line
         line_id = plot['line']
-        if line_id in widget.plots_dict:
+        if line_id in box.plots_dict:
           # remove it
-          widget.removeItem(widget.plots_dict[line_id])
-          del widget.plots_dict[line_id]
+          box.removeItem(box.plots_dict[line_id])
+          del box.plots_dict[line_id]
         
         # if the last line was deleted, delete the panel too
-        if len(widget.plots_dict) == 0:
-          widget.setParent(None)
-          widget.deleteLater()
+        if len(box.plots_dict) == 0:
+          box.setParent(None)
+          box.deleteLater()
           del self.panels[panel_id]
 
   def update_plots(self, experiments):
     # called by a timer to update plots periodically
-    for exp in experiments:
-      if not exp.done and next(exp.read_data):  # check if there's new data in the file
-        self.add(exp.enumerate_plots())  # update plots
+      for exp in experiments:
+        try:
+          if not exp.done and next(exp.read_data):  # check if there's new data in the file
+            self.add(exp.enumerate_plots())  # update plots
+        except IOError as err:
+          warnings.warn('Error reading ' + self.filename + ':\n' + repr(err))
 
 
-
-def mouse_move(event, widget):
+def mouse_move(event, box):
   # select curves when hovering them, and update mouse cursor
-  viewbox = widget.getPlotItem().vb
+  viewbox = box.plot_widget.getPlotItem().vb
   point = viewbox.mapSceneToView(event.pos())
   
   selected = None
-  for line in widget.plots_dict.values():
+  for line in box.plots_dict.values():
     # only the first one gets selected
     inside = (not selected and line.curve.mouseShape().contains(point))
 
@@ -187,7 +189,7 @@ def mouse_move(event, widget):
         line.mouse_over = False
 
   # show cursor (vertical line)
-  widget.cursor_vline.setVisible(True)
+  box.cursor_vline.setVisible(True)
   x = point.x()
 
   if selected:
@@ -197,7 +199,7 @@ def mouse_move(event, widget):
     (x, y) = (data[0][index], data[1][index])
 
     # show data coordinates
-    names = [name for (name, line) in widget.plots_dict.items() if line is selected]  # ideally should return only 1
+    names = [name for (name, line) in box.plots_dict.items() if line is selected]  # ideally should return only 1
     names = ' '.join(names)
     # this trick prints floats with 3 significant digits and no sci notation (e.g. 1e-4). also consider integers.
     if x.is_integer(): x = str(int(x))
@@ -208,11 +210,11 @@ def mouse_move(event, widget):
   else:
     text = ""
 
-  widget.cursor_label.setText(text)  #, size='10pt'
-  widget.cursor_vline.setValue(x)
+  box.cursor_label.setText(text)  #, size='10pt'
+  box.cursor_vline.setValue(x)
 
 
-def mouse_leave(event, widget):
+def mouse_leave(event, box):
   # hide cursor when the mouse leaves
-  widget.cursor_vline.setVisible(False)
+  box.cursor_vline.setVisible(False)
 

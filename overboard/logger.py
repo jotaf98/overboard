@@ -1,5 +1,5 @@
 
-import os, math, datetime, json, inspect, shutil
+import os, math, datetime, time, json, inspect, shutil
 
 try:
   from torch import save
@@ -35,13 +35,19 @@ class Logger:
     elif not isinstance(meta, dict):
       raise AssertionError("Meta should be a dictionary or argparse.Namespace.")
     meta['_done'] = False
-    meta['vis'] = []
     self.meta = meta
     self.save_timestamp = save_timestamp
-    self.vis_functions = {}
 
-    # create directory if it doesn't exist
+    self.vis_functions = {}  # custom function associated with each visualization
+    self.vis_counts = {}  # number of times each visualization was updated
+    self.vis_padding = 0
+
+    self.clock = -math.inf  # for rate_limit
+
+    # create directory if it doesn't exist, and (empty) visualizations file
     os.makedirs(self.directory, exist_ok=True)
+    with open(self.directory + '/visualizations', 'w') as file:
+      pass
 
     # get current timestamp as string, including timezone offset
     if self.save_timestamp:
@@ -116,6 +122,10 @@ class Logger:
     else:
       print(text)
   
+  def tensor(self, name, tensor, **kwargs):
+    """Store a tensor for visualization, with a unique name. Accepts the same keyword arguments as tshow."""
+    self.vis(name, 'tensor', tensor, **kwargs)
+
   def vis(self, name, func, *args, **kwargs):
     """Store a visualization function call, with a unique name.
     OverBoard will call the given function with the name as argument, plus the given arguments and keyword arguments.
@@ -128,23 +138,51 @@ class Logger:
         raise ValueError("Attempting to register a different visualization function under a previously used name.")
       source_file = info['source']
     else:
-      # new function. copy function source file to freeze changes in visualization code
-      source_file = inspect.getsourcefile(func)  # python source for function
-      if not source_file or func.__name__ == '<lambda>':
-        raise ValueError("Only visualization functions defined at the top-level of a script are supported.")
-      shutil.copy(source_file, self.directory + '/' + name + '.py')
+      # it's new
+      if ' ' in name:
+        raise ValueError('Visualization name cannot contain spaces.')
+      
+      if func == 'tensor':
+        # built-in functions, like the tensor visualization
+        source_file = 'builtin'
+      else:
+        # user function. copy function source file to freeze changes in visualization code
+        source_file = inspect.getsourcefile(func)  # python source for function
+        if not source_file or func.__name__ == '<lambda>':
+          raise ValueError("Only visualization functions defined at the top-level of a script are supported.")
+        shutil.copy(source_file, self.directory + '/' + name + '.py')
 
-      # register visualization function for quick look-up
+      # register visualization function for quick look-up next time this is called
       self.vis_functions[name] = {'func': func, 'source': source_file}
-
-      # register also in the metadata (JSON file)
-      self.meta['vis'].append(name)
-      self._save_meta()
+      self.vis_counts[name] = 0
 
     # pickle the function and arguments
-    data = {'func': func.__name__, 'source': source_file, 'args': args, 'kwargs': kwargs}
+    func_name = func if isinstance(func, str) else func.__name__
+    data = {'func': func_name, 'source': source_file, 'args': args, 'kwargs': kwargs}
     save(data, self.directory + '/' + name + '.pth')
-
+    
+    # update how many times this visualization was written, to signal a refresh in the GUI
+    self.vis_counts[name] += 1
+    with open(self.directory + '/visualizations', 'w') as file:
+      for (key, value) in self.vis_counts.items():
+        file.write('%s %i\n' % (key, value))
+      
+      # changes are detected based on file size (more reliable than file date across OS),
+      # so pad with a continually changing number of spaces. when some or all visualizations
+      # are updated in an iteration, the number of padding spaces will always be different.
+      self.vis_padding = self.vis_padding % (len(self.vis_counts) + 1) + 1
+      file.write(' ' * self.vis_padding)
+  
+  def rate_limit(self, seconds, reset=False):
+    """Returns true once every N seconds. Can be used to limit the rate of visualizations."""
+    if not reset:
+      if time.time() - self.clock > seconds:
+        self.clock = time.time()
+        return True
+      return False
+    else:
+      self.time = -math.inf
+      return False
 
   # note about "with" statement/destructors:
   # this class can be used either with a "with" statement, or without.
