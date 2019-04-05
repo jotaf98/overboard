@@ -9,7 +9,7 @@ import PyQt5.QtGui as QtGui
 
 from itertools import product, cycle, count
 from functools import partial
-import heapq
+import heapq, warnings
 import numpy as np
 
 import pyqtgraph as pg
@@ -150,10 +150,12 @@ class Plots():
 
   def update_plots(self, experiments):
     # called by a timer to update plots periodically
-    for exp in experiments:
-      if not exp.done and next(exp.read_data):  # check if there's new data in the file
-        self.add(exp.enumerate_plots())  # update plots
-
+      for exp in experiments:
+        try:
+          if not exp.done and next(exp.read_data):  # check if there's new data in the file
+            self.add(exp.enumerate_plots())  # update plots
+        except IOError as err:
+          warnings.warn('Error reading ' + self.filename + ':\n' + repr(err))
 
 
 def mouse_move(event, widget):

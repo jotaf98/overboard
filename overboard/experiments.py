@@ -1,4 +1,5 @@
-import collections, json, glob, re
+
+import collections, json, glob, re, warnings
 import numpy as np
 from os import path as os_path
 
@@ -34,6 +35,8 @@ class Experiment():
       next(self.read_data)
     except StopIteration:
       pass
+    except IOError as err:
+      warnings.warn('Error reading ' + self.filename + ':\n' + repr(err))
   
   def read_data_fast(self):  # generator function
     # polls the file for new data, bu keeps the file handle open
@@ -83,10 +86,15 @@ class Experiment():
       if len(self.names) == 0:
         # read CSV file header (with stat names). they're separated by commas, which can be escaped: \,
         self.names = re.split(r'(?<!\\),', line.strip())
+
+        if len(self.names) < 2: raise IOError('CSV has too few headers.')
+
         self.data = [[] for _ in range(len(self.names))]
       else:
         # read line of stat values
         values = line.split(',')
+
+        if len(values) != len(self.names): raise IOError('CSV line has wrong number of cells.')
 
         for i in range(len(values)):  # read one value per column
           self.data[i].append(float(values[i]))
