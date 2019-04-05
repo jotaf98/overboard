@@ -165,7 +165,7 @@ class Visualizations():
 
 
 tshow_images = []
-def tshow(tensor, create_window=True, title='Tensor', data_range=None, legend=True, **kwargs):
+def tshow(tensor, create_window=True, title='Tensor', data_range=None, grayscale=False, legend=None, **kwargs):
   """Shows a PyTorch tensor (including one or more RGB images) using PyQtGraph."""
 
   if make_grid is None:
@@ -238,8 +238,9 @@ def tshow(tensor, create_window=True, title='Tensor', data_range=None, legend=Tr
     # RGB image
     im_item.setLevels([data_range]*3)
   else:
-    # grayscale, set up colormap and possibly a legend
-    if colormaps is not None:  # use better colormap if matplotlib is available
+    # grayscale image or heatmap, set up colormap and possibly a legend
+    if not grayscale and colormaps is not None:
+      # use better colormap if matplotlib is available
       colormap = colormaps.viridis
       colormap._init()
       lut = (colormap._lut * 255)[:-1,:]  # remove last row
@@ -251,9 +252,9 @@ def tshow(tensor, create_window=True, title='Tensor', data_range=None, legend=Tr
     
     im_item.setLevels(data_range)
 
-    if legend:
+    if legend or (legend is None and not grayscale):
       # create legend with max and min values
-      leg = plot.addLegend()
+      leg = plot.addLegend(offset=(1, 1))
       leg.addItem(FilledIcon(low_color), f"Min: {data_range[0]:.3g}")
       leg.addItem(FilledIcon(high_color), f"Max: {data_range[1]:.3g}")
       
