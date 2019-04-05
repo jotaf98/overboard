@@ -1,5 +1,5 @@
 
-import os, math, datetime, json, inspect, shutil
+import os, math, datetime, time, json, inspect, shutil
 
 try:
   from torch import save
@@ -41,6 +41,8 @@ class Logger:
     self.vis_functions = {}  # custom function associated with each visualization
     self.vis_counts = {}  # number of times each visualization was updated
     self.vis_padding = 0
+
+    self.clock = -math.inf  # for rate_limit
 
     # create directory if it doesn't exist, and (empty) visualizations file
     os.makedirs(self.directory, exist_ok=True)
@@ -120,9 +122,9 @@ class Logger:
     else:
       print(text)
   
-  def tensor(self, name, tensor):
-    """Store a tensor for visualization, with a unique name."""
-    self.vis(name, 'tensor', tensor)
+  def tensor(self, name, tensor, **kwargs):
+    """Store a tensor for visualization, with a unique name. Accepts the same keyword arguments as tshow."""
+    self.vis(name, 'tensor', tensor, **kwargs)
 
   def vis(self, name, func, *args, **kwargs):
     """Store a visualization function call, with a unique name.
@@ -170,7 +172,17 @@ class Logger:
       # are updated in an iteration, the number of padding spaces will always be different.
       self.vis_padding = self.vis_padding % (len(self.vis_counts) + 1) + 1
       file.write(' ' * self.vis_padding)
-
+  
+  def rate_limit(self, seconds, reset=False):
+    """Returns true once every N seconds. Can be used to limit the rate of visualizations."""
+    if not reset:
+      if time.time() - self.clock > seconds:
+        self.clock = time.time()
+        return True
+      return False
+    else:
+      self.time = -math.inf
+      return False
 
   # note about "with" statement/destructors:
   # this class can be used either with a "with" statement, or without.
