@@ -35,13 +35,17 @@ class Logger:
     elif not isinstance(meta, dict):
       raise AssertionError("Meta should be a dictionary or argparse.Namespace.")
     meta['_done'] = False
-    meta['vis'] = []
     self.meta = meta
     self.save_timestamp = save_timestamp
-    self.vis_functions = {}
 
-    # create directory if it doesn't exist
+    self.vis_functions = {}  # custom function associated with each visualization
+    self.vis_counts = {}  # number of times each visualization was updated
+    self.vis_padding = 0
+
+    # create directory if it doesn't exist, and (empty) visualizations file
     os.makedirs(self.directory, exist_ok=True)
+    with open(self.directory + '/visualizations', 'w') as file:
+      pass
 
     # get current timestamp as string, including timezone offset
     if self.save_timestamp:
@@ -133,6 +137,9 @@ class Logger:
       source_file = info['source']
     else:
       # it's new
+      if ' ' in name:
+        raise ValueError('Visualization name cannot contain spaces.')
+      
       if func == 'tensor':
         # built-in functions, like the tensor visualization
         source_file = 'builtin'
@@ -145,15 +152,24 @@ class Logger:
 
       # register visualization function for quick look-up next time this is called
       self.vis_functions[name] = {'func': func, 'source': source_file}
-
-      # register also in the metadata (JSON file)
-      self.meta['vis'].append(name)
-      self._save_meta()
+      self.vis_counts[name] = 0
 
     # pickle the function and arguments
     func_name = func if isinstance(func, str) else func.__name__
     data = {'func': func_name, 'source': source_file, 'args': args, 'kwargs': kwargs}
     save(data, self.directory + '/' + name + '.pth')
+    
+    # update how many times this visualization was written, to signal a refresh in the GUI
+    self.vis_counts[name] += 1
+    with open(self.directory + '/visualizations', 'w') as file:
+      for (key, value) in self.vis_counts.items():
+        file.write('%s %i\n' % (key, value))
+      
+      # changes are detected based on file size (more reliable than file date across OS),
+      # so pad with a continually changing number of spaces. when some or all visualizations
+      # are updated in an iteration, the number of padding spaces will always be different.
+      self.vis_padding = self.vis_padding % (len(self.vis_counts) + 1) + 1
+      file.write(' ' * self.vis_padding)
 
 
   # note about "with" statement/destructors:
