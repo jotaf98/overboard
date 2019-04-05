@@ -1,6 +1,8 @@
 
 import math, warnings, os, runpy
 from collections import OrderedDict
+
+import PyQt5.QtWidgets as QtWidgets
 import pyqtgraph as pg
 
 try:
@@ -62,7 +64,7 @@ class Visualizations():
     if not isinstance(panels, list): panels = [panels]  # wrap single element
     return panels
 
-  def create_widget(self, contents, plotsize):
+  def create_widget(self, contents, title, plotsize):
     if type(contents).__name__ == 'Figure':
       # wrap MatPlotLib figure in a Qt widget
       widget = FigureCanvas(contents)
@@ -71,9 +73,18 @@ class Visualizations():
       widget = pg.GraphicsLayoutWidget()
       widget.addItem(contents)
 
-    widget.setFixedWidth(plotsize)
-    widget.setFixedHeight(plotsize)
-    return widget
+    # create a QGroupBox around it, to show the title
+    vbox = QtWidgets.QVBoxLayout()
+    vbox.addWidget(widget)
+    box = QtWidgets.QGroupBox(title)
+    box.setLayout(vbox)
+    box.plot_widget = widget
+    
+    # set size
+    box.setFixedWidth(plotsize)
+    box.setFixedHeight(plotsize)
+
+    return box
 
   def update(self):
     # called by a timer to check for updates. don't update if the experiment is finished.
@@ -108,15 +119,15 @@ class Visualizations():
             for widget in old_panels:
               widget.setParent(None)
               widget.deleteLater()
-            widgets = [self.create_widget(plot, plotsize) for plot in new_plots]
+            widgets = [self.create_widget(plot, name, plotsize) for plot in new_plots]
             for widget in widgets:
               layout.addWidget(widget)
             self.panels[name] = widgets
           else:
             # try to replace the contents of existing widgets, to keep their order
-            for (widget, plot) in zip(old_panels, new_plots):
-              widget.clear()
-              widget.addItem(plot)
+            for (box, plot) in zip(old_panels, new_plots):
+              box.plot_widget.clear()
+              box.plot_widget.addItem(plot)
 
   def select(self, exp):
     # select a new experiment, showing its visualizations (and removing previously selected ones)
@@ -129,7 +140,7 @@ class Visualizations():
       
       for name in vis_counts.keys():
         plots = self.load_single(exp, name)  # load data into plots
-        widgets = [self.create_widget(plot, plotsize) for plot in plots]  # turn them into widgets
+        widgets = [self.create_widget(plot, name, plotsize) for plot in plots]  # turn them into widgets
         new_panels.append((name, widgets))
 
     new_panels = OrderedDict(new_panels)

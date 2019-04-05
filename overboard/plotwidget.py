@@ -45,7 +45,7 @@ class FancyAxis(pg.AxisItem):
       p.drawText(rect, flags, text)
 
 
-def create_plot_widget():
+def create_plot_widget(title):
   # create our special axis. only one of them draws the background.
   axis = {'left': FancyAxis('left', backgroundColor=None), 'bottom': FancyAxis('bottom')}
   font = QtGui.QFont()
@@ -55,6 +55,14 @@ def create_plot_widget():
     ax.setStyle(tickTextOffset=10)  # , tickTextWidth=30, tickTextHeight=18  # last ones seem to have no effect
 
   # create plot widget and activate grid
-  p = pg.PlotWidget(axisItems=axis)
-  p.showGrid(x=True, y=True, alpha=255)
-  return p
+  plot_widget = pg.PlotWidget(axisItems=axis)
+  plot_widget.showGrid(x=True, y=True, alpha=255)
+
+  # create a QGroupBox around it, to show the title
+  vbox = QtWidgets.QVBoxLayout()
+  vbox.addWidget(plot_widget)
+  box = QtWidgets.QGroupBox(title)
+  box.setLayout(vbox)
+  box.plot_widget = plot_widget
+
+  return (plot_widget, box)

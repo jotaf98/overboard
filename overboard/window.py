@@ -284,9 +284,10 @@ class Window(QtWidgets.QMainWindow):
     for panel in self.plots.panels.values():
       panel.setFixedWidth(plotsize)
       panel.setFixedHeight(plotsize)
-    for panel in self.visualizations.panels.values():
-      panel.setFixedWidth(plotsize)
-      panel.setFixedHeight(plotsize)
+    for panel_group in self.visualizations.panels.values():
+      for panel in panel_group:
+        panel.setFixedWidth(plotsize)
+        panel.setFixedHeight(plotsize)
   
   def smooth_slider_changed(self):
     self.smoother = Smoother(self.smooth_slider.value() / 4.0)
