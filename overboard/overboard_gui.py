@@ -25,6 +25,7 @@ def main():
   parser.add_argument("folder", help="Root folder where experiments are found.")
   parser.add_argument("-plotsize", default=0, type=float, help="Initial size of plots, in pixels.")
   #parser.add_argument("-smoothen", default=0, type=float)
+  parser.add_argument("-mpl-dpi", default=100, type=int, help="DPI setting for MatPlotLib plots, may be used if text is too big/small (useful for high-DPI monitors).")
   parser.add_argument("--force-reopen-files", action='store_true', default=False, help="Slower but more reliable refresh method, useful for remote files.")
   parser.add_argument("-refresh-plots", default=1999, type=int, help="Refresh interval for plot updates, in miliseconds.")
   parser.add_argument("-refresh-new", default=3999, type=int, help="Refresh interval for finding new experiments, in miliseconds.")
@@ -45,11 +46,14 @@ def main():
   # create window and plots holders
   window = Window(args)
   plots = Plots(window)
-  visualizations = Visualizations(window, args.no_vis_snapshot)
+  visualizations = Visualizations(window, args.no_vis_snapshot, args.mpl_dpi)
 
   # create initial plots for all the experiments
   for exp in experiments:
     window.add_experiment(exp, refresh_table=False)
+  
+  if len(experiments) > 0:  # select first row if any
+    window.table.selectRow(0)
   
   # create timer for updating the plots periodically if needed
   plot_timer = QtCore.QTimer()

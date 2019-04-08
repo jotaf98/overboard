@@ -29,6 +29,7 @@ except:
     warnings.warn("Could not load MatPlotLib.")
     return pg.PlotWidget()
   colormaps = None
+  matplotlib = None
 
 
 def wrap_plot(plot):
@@ -42,7 +43,7 @@ def wrap_plot(plot):
 
 class Visualizations():
   # custom visualizations, supports both MatPlotLib (MPL) and PyQtGraph (PG) figures
-  def __init__(self, window, no_vis_snapshot):
+  def __init__(self, window, no_vis_snapshot, mpl_dpi):
     self.window = window
     window.visualizations = self  # back-reference
 
@@ -51,7 +52,10 @@ class Visualizations():
 
     self.vis_counts = OrderedDict()
     self.last_size = None
+
     self.no_vis_snapshot = no_vis_snapshot
+    if matplotlib is not None:
+      matplotlib.rcParams['figure.dpi'] = mpl_dpi
 
   def load_single_vis(self, exp, name):
     # load a single visualization of the given experiment, with the given name.
