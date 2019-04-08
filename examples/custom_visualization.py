@@ -25,11 +25,7 @@ def show_prediction(name, image, target, prediction):
     bar_obj = axes[1].bar(np.arange(num_classes), prediction, align='center', color=bar_colors)
     
     # make axes look nicer
-    axes[0].set_title('Input')
-    axes[0].axis('off')
-    axes[1].set_title('Probabilities')
-    axes[1].set_ylim([0, 1])
-    axes[1].set_aspect(num_classes)
+    configure_axes(axes, num_classes)
 
     # save object handles for later
     figures[name] = (figure, image_obj, bar_obj)
@@ -61,3 +57,10 @@ def get_bar_colors(prediction, target):
 
   return bar_colors
 
+
+def configure_axes(axes, num_classes):
+  axes[0].set_title('Input')
+  axes[0].axis('off')
+  axes[1].set_title('Probabilities')
+  axes[1].set_ylim([0, 1])
+  axes[1].set_aspect(num_classes)
