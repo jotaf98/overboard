@@ -123,12 +123,12 @@ class Logger:
       print(text)
   
   def tensor(self, name, tensor, **kwargs):
-    """Store a tensor to display in the Overboard GUI. The name must be unique.
+    """Store a tensor to display in the OverBoard GUI. The name must be unique.
     Any keyword arguments will be passed to overboard.tshow."""
     self.visualize('tensor', name, tensor, **kwargs)
 
   def visualize(self, func, name, *args, **kwargs):
-    """Store a visualization to display in the Overboard GUI.
+    """Store a visualization to display in the OverBoard GUI.
     The first argument must be a function, with the signature:
       figures = func(name, *args, **kwargs)
     where name is a unique name, and the following arguments/keyword arguments can be anything (e.g. tensors).

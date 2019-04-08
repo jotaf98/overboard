@@ -42,7 +42,7 @@ def wrap_plot(plot):
 
 class Visualizations():
   # custom visualizations, supports both MatPlotLib (MPL) and PyQtGraph (PG) figures
-  def __init__(self, window, use_frozen_visualizations):
+  def __init__(self, window, no_vis_snapshot):
     self.window = window
     window.visualizations = self  # back-reference
 
@@ -51,7 +51,7 @@ class Visualizations():
 
     self.vis_counts = OrderedDict()
     self.last_size = None
-    self.use_frozen_visualizations = use_frozen_visualizations
+    self.no_vis_snapshot = no_vis_snapshot
 
   def load_single_vis(self, exp, name):
     # load a single visualization of the given experiment, with the given name.
@@ -75,7 +75,7 @@ class Visualizations():
     else:
       # custom visualization function. load the original source file or saved file
       # from the experiment directory, and call the specified function in it.
-      if self.use_frozen_visualizations: source_file = exp.directory + '/' + name + '.py'
+      if not self.no_vis_snapshot: source_file = exp.directory + '/' + name + '.py'
       panels = []
 
       try:
