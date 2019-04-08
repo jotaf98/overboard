@@ -81,6 +81,7 @@ class Experiment():
       yield file_changed
 
   def read_single_line(self, file):
+    # reads a single CSV line from the file, returning True if some data was read.
     line = file.readline()
     if line:
       if len(self.names) == 0:
@@ -94,11 +95,14 @@ class Experiment():
         # read line of stat values
         values = line.split(',')
 
-        if len(values) != len(self.names): raise IOError('CSV line has wrong number of cells.')
-
-        for i in range(len(values)):  # read one value per column
-          self.data[i].append(float(values[i]))
-
+        if len(values) == len(self.names):
+          for i in range(len(values)):  # read one value per column
+            self.data[i].append(float(values[i]))
+        else:
+          if len(values) > len(self.names):
+            raise IOError('CSV line has more cells than the header.')
+          return False  # incomplete line, file may still be written to
+        
       return True
     return False
 
