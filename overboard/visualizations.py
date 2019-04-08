@@ -48,7 +48,7 @@ class Visualizations():
 
     self.panels = OrderedDict()  # widgets containing plots, indexed by name
     self.selected_exp = None  # selected experiment
-    
+
     self.vis_counts = OrderedDict()
     self.last_size = None
     self.use_frozen_visualizations = use_frozen_visualizations
@@ -71,10 +71,10 @@ class Visualizations():
       # from the experiment directory, and call the specified function in it.
       if self.use_frozen_visualizations: source_file = exp.directory + '/' + name + '.py'
       panels = []
-      
+
       try:
         module = runpy.run_path(source_file)
-        
+
         try:
           panels = module[func_name](name, *args, **kwargs)
         except Exception as err:
@@ -82,7 +82,7 @@ class Visualizations():
 
       except Exception as err:
         warnings.warn('Error loading visualization function from ' + source_file + ':\n' + repr(err))
-    
+
     # ensure a list is returned, and wrap plots in appropriate Qt widgets
     if not isinstance(panels, list): panels = [panels]
     return [wrap_plot(panel) for panel in panels]
@@ -136,7 +136,7 @@ class Visualizations():
     if exp is not None:
       # load master list of visualizations (and their counts), then load each one
       vis_counts = self.read_vis_counts(exp)
-      
+
       for name in vis_counts.keys():
         # load data into plots, and turn them into visible panels
         plots = self.load_single_vis(exp, name)
@@ -144,19 +144,19 @@ class Visualizations():
         new_panels.append((name, panels))
 
     new_panels = OrderedDict(new_panels)
-    
+
     # remove previous widgets (this is done after loading the visualizations to reduce delay)
     for panel in self.all_panels():
       panel.setParent(None)
       panel.deleteLater()
-    
+
     # add the new widgets to the flow layout, in order
     self.panels = new_panels
     for panel in self.all_panels():
       self.window.flow_layout.addWidget(panel)
 
     self.last_size = None
-  
+
   def all_panels(self):  # flatten nested list of panels
     if len(self.panels) == 0: return []  # special case
     return [p for panels in self.panels.values() for p in panels]
@@ -191,7 +191,7 @@ def tshow(tensor, create_window=True, title='Tensor', data_range=None, grayscale
   if len(tensor.shape) > 4:
     warnings.warn('Cannot show tensors with more than 4 dimensions.')
     return
-  
+
   # insert singleton dimensions on the left to always get 4 dimensions
   while len(tensor.shape) < 4:
     tensor.unsqueeze_(0)
@@ -199,7 +199,7 @@ def tshow(tensor, create_window=True, title='Tensor', data_range=None, grayscale
   sh = tensor.shape
   if sh[0] == 1:  # case of 3D tensors, leave singleton dimension for color
     tensor = tensor.reshape(sh[1], 1, sh[2], sh[3])
-  
+
   sh = tensor.shape
   if sh[1] in [1, 3]:
     # a linear collection of images: channels are RGB or single-channel.
@@ -260,15 +260,15 @@ def tshow(tensor, create_window=True, title='Tensor', data_range=None, grayscale
     else:
       lut = []
       (low_color, high_color) = ('k', 'w')
-    
+
     im_item.setLevels(data_range)
 
     if legend or (legend is None and not grayscale):
       # create legend with max and min values
       leg = plot.addLegend(offset=(1, 1))
-      leg.addItem(FilledIcon(low_color), f"Min: {data_range[0]:.3g}")
-      leg.addItem(FilledIcon(high_color), f"Max: {data_range[1]:.3g}")
-      
+      leg.addItem(FilledIcon(low_color), "Min: {:.3g}".format(data_range[0]))
+      leg.addItem(FilledIcon(high_color), "Max: {:.3g}".format(data_range[1]))
+
       # monkey-patch paint method to draw a more opaque background
       def paint(self, p, *args):
         color = pg.mkColor(pg.getConfigOption('background'))
