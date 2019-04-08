@@ -11,7 +11,7 @@ from torchvision import datasets, transforms
 
 from overboard import Logger
 
-import mnist_visualization
+from custom_visualization import show_prediction
 
 
 class Net(nn.Module):
@@ -51,11 +51,14 @@ def train(args, model, device, train_loader, optimizer, epoch, logger):
 
     if logger.rate_limit(seconds=5):
       # show the images once in a while
-      logger.tensor('images', data, grayscale=True)
+      logger.tensor('Images', data, grayscale=True)
 
       # also show conv1's filters
       parameters = dict(model.named_parameters())
-      logger.tensor('conv1', parameters['conv1.weight'])
+      logger.tensor('Conv1 filters', parameters['conv1.weight'])
+
+      # this is an example MatPlotLib plot (see custom_visualization.py)
+      logger.visualize(show_prediction, 'A custom plot', data[0,0,:,:], target[0], output[0,:].detach())
 
 def test(args, model, device, test_loader, logger):
   model.eval()
