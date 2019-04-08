@@ -58,11 +58,6 @@ def create_plot_widget(title):
   plot_widget = pg.PlotWidget(axisItems=axis)
   plot_widget.showGrid(x=True, y=True, alpha=255)
 
-  # create a QGroupBox around it, to show the title
-  vbox = QtWidgets.QVBoxLayout()
-  vbox.addWidget(plot_widget)
-  box = QtWidgets.QGroupBox(title)
-  box.setLayout(vbox)
-  box.plot_widget = plot_widget
+  return plot_widget
 
-  return (plot_widget, box)
+

@@ -123,13 +123,17 @@ class Logger:
       print(text)
   
   def tensor(self, name, tensor, **kwargs):
-    """Store a tensor for visualization, with a unique name. Accepts the same keyword arguments as tshow."""
-    self.vis(name, 'tensor', tensor, **kwargs)
+    """Store a tensor to display in the Overboard GUI. The name must be unique.
+    Any keyword arguments will be passed to overboard.tshow."""
+    self.visualize('tensor', name, tensor, **kwargs)
 
-  def vis(self, name, func, *args, **kwargs):
-    """Store a visualization function call, with a unique name.
-    OverBoard will call the given function with the name as argument, plus the given arguments and keyword arguments.
-    It should return a list of matplotlib.Figure objects, which will be shown as extra plots."""
+  def visualize(self, func, name, *args, **kwargs):
+    """Store a visualization to display in the Overboard GUI.
+    The first argument must be a function, with the signature:
+      figures = func(name, *args, **kwargs)
+    where name is a unique name, and the following arguments/keyword arguments can be anything (e.g. tensors).
+    The function can draw any graphics and return them as a list of MatPlotLib Figure objects or PyQtGraph PlotItem objects.
+    These will be shown when the experiment is selected in the GUI."""
 
     if name in self.vis_functions:
       # reuse previously registered visualization function
@@ -139,8 +143,8 @@ class Logger:
       source_file = info['source']
     else:
       # it's new
-      if ' ' in name:
-        raise ValueError('Visualization name cannot contain spaces.')
+      if not isinstance(name, str): raise ValueError("Visualization name must be a string.")
+      if '\t' in name: raise ValueError('Visualization name cannot contain tab characters (\\t).')
       
       if func == 'tensor':
         # built-in functions, like the tensor visualization
@@ -165,7 +169,7 @@ class Logger:
     self.vis_counts[name] += 1
     with open(self.directory + '/visualizations', 'w') as file:
       for (key, value) in self.vis_counts.items():
-        file.write('%s %i\n' % (key, value))
+        file.write('%s\t%i\n' % (key, value))
       
       # changes are detected based on file size (more reliable than file date across OS),
       # so pad with a continually changing number of spaces. when some or all visualizations

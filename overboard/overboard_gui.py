@@ -29,6 +29,7 @@ def main():
   parser.add_argument("-refresh-plots", default=1999, type=int, help="Refresh interval for plot updates, in miliseconds.")
   parser.add_argument("-refresh-new", default=3999, type=int, help="Refresh interval for finding new experiments, in miliseconds.")
   parser.add_argument("-refresh-vis", default=2999, type=int, help="Refresh interval for visualizations, in miliseconds.")
+  parser.add_argument("--use-frozen-visualizations", action='store_true', default=False, help="Draws custom visualizations using a snapshot of the visualization function saved with each experiment, instead of using the original visualization function (which may have changed). This may be useful to show visualizations of old experiments.")
   args = parser.parse_args()
   
   # find experiment files
@@ -44,7 +45,7 @@ def main():
   # create window and plots holders
   window = Window(args)
   plots = Plots(window)
-  visualizations = Visualizations(window)
+  visualizations = Visualizations(window, args.use_frozen_visualizations)
 
   # create initial plots for all the experiments
   for exp in experiments:

@@ -31,9 +31,18 @@ except:
   colormaps = None
 
 
+def wrap_plot(plot):
+  # helper function, to wrap MatPlotLib figure and PyQtGraph PlotItem/ViewBox/etc in a Qt widget
+  if type(plot).__name__ == 'Figure':
+    widget = FigureCanvas(plot)
+  else:
+    widget = pg.GraphicsLayoutWidget()
+    widget.addItem(plot)
+  return widget
+
 class Visualizations():
   # custom visualizations, supports both MatPlotLib (MPL) and PyQtGraph (PG) figures
-  def __init__(self, window):
+  def __init__(self, window, use_frozen_visualizations):
     self.window = window
     window.visualizations = self  # back-reference
 
@@ -42,53 +51,45 @@ class Visualizations():
     
     self.vis_counts = OrderedDict()
     self.last_size = None
+    self.use_frozen_visualizations = use_frozen_visualizations
 
-  def load_single(self, exp, name):
+  def load_single_vis(self, exp, name):
     # load a single visualization of the given experiment, with the given name.
-    # first, load function info and arguments from pickled file
-    data = load(exp.directory + '/' + name + '.pth')
+    # first, load function info and arguments from pickled file, to the CPU.
+    data = load(exp.directory + '/' + name + '.pth', map_location='cpu')
 
     func_name = data['func']
     args = data['args']
     kwargs = data['kwargs']
+    source_file = data['source']
 
     # call a built-in function, e.g. simple tensor visualization
-    if data['source'] == 'builtin' and func_name == 'tensor':
+    if source_file == 'builtin' and func_name == 'tensor':
       panels = tshow(*args, **kwargs, create_window=False, title=name)
     else:
-      # custom visualization function.
-      # load the saved module from the experiment directory, and call the specified function of it
-      module = runpy.run_path(exp.directory + '/' + name + '.py')
-      panels = module[func_name](name, *args, **kwargs)
+      # custom visualization function. load the original source file or saved file
+      # from the experiment directory, and call the specified function in it.
+      if self.use_frozen_visualizations: source_file = exp.directory + '/' + name + '.py'
+      panels = []
+      
+      try:
+        module = runpy.run_path(source_file)
+        
+        try:
+          panels = module[func_name](name, *args, **kwargs)
+        except Exception as err:
+          warnings.warn('Error executing visualization function ' + func_name + ' from ' + source_file + ':\n' + repr(err))
+
+      except Exception as err:
+        warnings.warn('Error loading visualization function from ' + source_file + ':\n' + repr(err))
     
-    if not isinstance(panels, list): panels = [panels]  # wrap single element
-    return panels
-
-  def create_widget(self, contents, title, plotsize):
-    if type(contents).__name__ == 'Figure':
-      # wrap MatPlotLib figure in a Qt widget
-      widget = FigureCanvas(contents)
-    else:
-      # wrap PyQtGraph PlotItem/ViewBox/etc in a Qt widget
-      widget = pg.GraphicsLayoutWidget()
-      widget.addItem(contents)
-
-    # create a QGroupBox around it, to show the title
-    vbox = QtWidgets.QVBoxLayout()
-    vbox.addWidget(widget)
-    box = QtWidgets.QGroupBox(title)
-    box.setLayout(vbox)
-    box.plot_widget = widget
-    
-    # set size
-    box.setFixedWidth(plotsize)
-    box.setFixedHeight(plotsize)
-
-    return box
+    # ensure a list is returned, and wrap plots in appropriate Qt widgets
+    if not isinstance(panels, list): panels = [panels]
+    return [wrap_plot(panel) for panel in panels]
 
   def update(self):
     # called by a timer to check for updates. don't update if the experiment is finished.
-    if self.selected_exp is None or self.selected_exp.meta.get('_done', True): return
+    if self.selected_exp is None or self.selected_exp.done: return
 
     # see if the file size changed as a basic check
     try:
@@ -111,7 +112,7 @@ class Visualizations():
       for (name, count) in vis_counts.items():
         if name not in self.vis_counts or self.vis_counts[name] != count:
           # load the new data
-          new_plots = self.load_single(self.selected_exp, name)
+          new_plots = self.load_single_vis(self.selected_exp, name)
           old_panels = self.panels.get(name, None)
 
           if old_panels is None or len(old_panels) == 0 or len(old_panels) != len(new_plots):
@@ -119,15 +120,14 @@ class Visualizations():
             for widget in old_panels:
               widget.setParent(None)
               widget.deleteLater()
-            widgets = [self.create_widget(plot, name, plotsize) for plot in new_plots]
-            for widget in widgets:
-              layout.addWidget(widget)
-            self.panels[name] = widgets
+            self.panels[name] = [self.window.add_panel(plot, name) for plot in new_plots]
           else:
-            # try to replace the contents of existing widgets, to keep their order
-            for (box, plot) in zip(old_panels, new_plots):
-              box.plot_widget.clear()
-              box.plot_widget.addItem(plot)
+            # try to replace the contents of existing panels, to keep their order
+            for (panel, plot) in zip(old_panels, new_plots):
+              vbox = panel.layout()
+              vbox.itemAt(0).widget().deleteLater()
+              vbox.addWidget(plot)
+              panel.plot_widget = plot
 
   def select(self, exp):
     # select a new experiment, showing its visualizations (and removing previously selected ones)
@@ -136,24 +136,24 @@ class Visualizations():
     if exp is not None:
       # load master list of visualizations (and their counts), then load each one
       vis_counts = self.read_vis_counts(exp)
-      plotsize = self.window.size_slider.value()
       
       for name in vis_counts.keys():
-        plots = self.load_single(exp, name)  # load data into plots
-        widgets = [self.create_widget(plot, name, plotsize) for plot in plots]  # turn them into widgets
-        new_panels.append((name, widgets))
+        # load data into plots, and turn them into visible panels
+        plots = self.load_single_vis(exp, name)
+        panels = [self.window.add_panel(plot, name, add_to_layout=False) for plot in plots]
+        new_panels.append((name, panels))
 
     new_panels = OrderedDict(new_panels)
     
     # remove previous widgets (this is done after loading the visualizations to reduce delay)
-    for widget in self.all_panels():
-      widget.setParent(None)
-      widget.deleteLater()
+    for panel in self.all_panels():
+      panel.setParent(None)
+      panel.deleteLater()
     
     # add the new widgets to the flow layout, in order
     self.panels = new_panels
-    for widget in self.all_panels():
-      self.window.flow_layout.addWidget(widget)
+    for panel in self.all_panels():
+      self.window.flow_layout.addWidget(panel)
 
     self.last_size = None
   
@@ -167,8 +167,8 @@ class Visualizations():
     try:
       with open(exp.directory + '/visualizations', 'r') as file:
         for line in file:
-          values = line.split()
-          if values:
+          values = line.split('\t')
+          if len(values) == 2:
             vis_counts[values[0]] = int(values[1])  # the format is: "name count\n"
     except FileNotFoundError:
       pass

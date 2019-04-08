@@ -63,37 +63,30 @@ class Plots():
         # create new panel to contain plot.
         # if title not defined, use the panel ID (e.g. stat name)
         title = str(plot.get('title', plot['panel']))
-        (plot_widget, box) = create_plot_widget(title)
-        
-        # set size based on size slider
-        if plotsize is None:
-          plotsize = self.window.size_slider.value()
-        box.setFixedWidth(plotsize)
-        box.setFixedHeight(plotsize)
+        plot_widget = create_plot_widget(title)
+        panel = self.window.add_panel(plot_widget, title)
 
-        self.window.flow_layout.addWidget(box)  # add to window's flow layout
-
-        box.plots_dict = {}
+        panel.plots_dict = {}
         
         # set up mouse move event
-        plot_widget.mouseMoveEvent = partial(mouse_move, box=box)
-        plot_widget.leaveEvent = partial(mouse_leave, box=box)
+        plot_widget.mouseMoveEvent = partial(mouse_move, panel=panel)
+        plot_widget.leaveEvent = partial(mouse_leave, panel=panel)
 
         # mouse cursor (vertical line)
         vline = pg.InfiniteLine(angle=90, pen="#B0B0B0")
         vline.setVisible(False)
         plot_widget.getPlotItem().addItem(vline, ignoreBounds=True)  # ensure it doesn't mess autorange
-        box.cursor_vline = vline
+        panel.cursor_vline = vline
 
         # mouse cursor text
         label = pg.LabelItem(justify='left')
         label.setParentItem(plot_widget.getPlotItem().getViewBox())
         label.anchor(itemPos=(0, 0), parentPos=(0, 0))
-        box.cursor_label = label
+        panel.cursor_label = label
 
-        self.panels[panel_id] = box
+        self.panels[panel_id] = panel
       else:
-        box = self.panels[panel_id]  # reuse existing panel
+        panel = self.panels[panel_id]  # reuse existing panel
       
       # get data points
       exp = plot['exp']
@@ -114,17 +107,17 @@ class Plots():
         pen = pg.mkPen(exp.style)
       
       # check if plot line already exists
-      if plot['line'] not in box.plots_dict:
+      if plot['line'] not in panel.plots_dict:
         # create new line
-        line = box.plot_widget.getPlotItem().plot(xs, ys, pen=pen)
+        line = panel.plot_widget.getPlotItem().plot(xs, ys, pen=pen)
         
         line.curve.setClickable(True, 8)  # size of hover region
         line.mouse_over = False
         
-        box.plots_dict[plot['line']] = line
+        panel.plots_dict[plot['line']] = line
       else:
         # update existing one
-        line = box.plots_dict[plot['line']]
+        line = panel.plots_dict[plot['line']]
         line.setData(xs, ys)
         line.setPen(pen)
   
@@ -133,19 +126,19 @@ class Plots():
       # find panel
       panel_id = (plot['panel'], plot['x'])
       if panel_id in self.panels:
-        box = self.panels[panel_id]
+        panel = self.panels[panel_id]
 
         # find plot line
         line_id = plot['line']
-        if line_id in box.plots_dict:
+        if line_id in panel.plots_dict:
           # remove it
-          box.removeItem(box.plots_dict[line_id])
-          del box.plots_dict[line_id]
+          panel.removeItem(panel.plots_dict[line_id])
+          del panel.plots_dict[line_id]
         
         # if the last line was deleted, delete the panel too
-        if len(box.plots_dict) == 0:
-          box.setParent(None)
-          box.deleteLater()
+        if len(panel.plots_dict) == 0:
+          panel.setParent(None)
+          panel.deleteLater()
           del self.panels[panel_id]
 
   def update_plots(self, experiments):
@@ -156,15 +149,17 @@ class Plots():
             self.add(exp.enumerate_plots())  # update plots
         except IOError as err:
           warnings.warn('Error reading ' + exp.filename + ':\n' + repr(err))
+        except StopIteration:
+          pass
 
 
-def mouse_move(event, box):
+def mouse_move(event, panel):
   # select curves when hovering them, and update mouse cursor
-  viewbox = box.plot_widget.getPlotItem().vb
+  viewbox = panel.plot_widget.getPlotItem().vb
   point = viewbox.mapSceneToView(event.pos())
   
   selected = None
-  for line in box.plots_dict.values():
+  for line in panel.plots_dict.values():
     # only the first one gets selected
     inside = (not selected and line.curve.mouseShape().contains(point))
 
@@ -189,7 +184,7 @@ def mouse_move(event, box):
         line.mouse_over = False
 
   # show cursor (vertical line)
-  box.cursor_vline.setVisible(True)
+  panel.cursor_vline.setVisible(True)
   x = point.x()
 
   if selected:
@@ -199,7 +194,7 @@ def mouse_move(event, box):
     (x, y) = (data[0][index], data[1][index])
 
     # show data coordinates
-    names = [name for (name, line) in box.plots_dict.items() if line is selected]  # ideally should return only 1
+    names = [name for (name, line) in panel.plots_dict.items() if line is selected]  # ideally should return only 1
     names = ' '.join(names)
     # this trick prints floats with 3 significant digits and no sci notation (e.g. 1e-4). also consider integers.
     if x.is_integer(): x = str(int(x))
@@ -210,11 +205,11 @@ def mouse_move(event, box):
   else:
     text = ""
 
-  box.cursor_label.setText(text)  #, size='10pt'
-  box.cursor_vline.setValue(x)
+  panel.cursor_label.setText(text)  #, size='10pt'
+  panel.cursor_vline.setValue(x)
 
 
-def mouse_leave(event, box):
+def mouse_leave(event, panel):
   # hide cursor when the mouse leaves
-  box.cursor_vline.setVisible(False)
+  panel.cursor_vline.setVisible(False)
 
