@@ -56,7 +56,13 @@ class Visualizations():
   def load_single_vis(self, exp, name):
     # load a single visualization of the given experiment, with the given name.
     # first, load function info and arguments from pickled file, to the CPU.
-    data = load(exp.directory + '/' + name + '.pth', map_location='cpu')
+    filename = exp.directory + '/' + name + '.pth'
+    try:
+      data = load(filename, map_location='cpu')
+    except Exception as err:
+      # ignore error about incomplete data, since file may still be written to; otherwise report it.
+      if not insinstance(err, RuntimeError) or 'storage has wrong size' not in str(err):
+        warnings.warn("Error loading visualization data from " + filename + ":\n" + repr(err))
 
     func_name = data['func']
     args = data['args']
