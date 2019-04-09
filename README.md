@@ -1,6 +1,10 @@
 # OverBoard
 Pure Python dashboard for monitoring deep learning experiments (like TensorBoard for PyTorch/MXNet/etc, without a browser)
 
+<p align="center">
+<img align="center" alt="editor" src="https://github.com/jotaf98/overboard/blob/master/demo.gif" />
+</p>
+
 ## Features
 
 - Automatically discovers new experiments in a directory tree, and updates plots in real-time
