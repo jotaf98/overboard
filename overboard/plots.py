@@ -9,7 +9,7 @@ import PyQt5.QtGui as QtGui
 
 from itertools import product, cycle, count
 from functools import partial
-import heapq, warnings
+import heapq, logging
 import numpy as np
 
 import pyqtgraph as pg
@@ -147,8 +147,8 @@ class Plots():
         try:
           if not exp.done and next(exp.read_data):  # check if there's new data in the file
             self.add(exp.enumerate_plots())  # update plots
-        except IOError as err:
-          warnings.warn('Error reading ' + exp.filename + ':\n' + repr(err))
+        except IOError:
+          logging.exception('Error reading ' + exp.filename)
         except StopIteration:
           pass
 

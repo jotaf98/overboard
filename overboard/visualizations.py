@@ -1,5 +1,5 @@
 
-import math, warnings, os, runpy
+import math, logging, os, runpy
 from collections import OrderedDict
 
 import PyQt5.QtWidgets as QtWidgets
@@ -26,20 +26,11 @@ try:
   from matplotlib.pyplot import cm as colormaps
 except:
   def FigureCanvas(fig):
-    warnings.warn("Could not load MatPlotLib.")
+    logging.warning("Could not load MatPlotLib.")
     return pg.PlotWidget()
   colormaps = None
   matplotlib = None
 
-
-def wrap_plot(plot):
-  # helper function, to wrap MatPlotLib figure and PyQtGraph PlotItem/ViewBox/etc in a Qt widget
-  if type(plot).__name__ == 'Figure':
-    widget = FigureCanvas(plot)
-  else:
-    widget = pg.GraphicsLayoutWidget()
-    widget.addItem(plot)
-  return widget
 
 class Visualizations():
   # custom visualizations, supports both MatPlotLib (MPL) and PyQtGraph (PG) figures
@@ -49,6 +40,7 @@ class Visualizations():
 
     self.panels = OrderedDict()  # widgets containing plots, indexed by name
     self.selected_exp = None  # selected experiment
+    self.modules = {}  # loaded modules with visualization functions
 
     self.vis_counts = OrderedDict()
     self.last_size = None
@@ -65,8 +57,8 @@ class Visualizations():
       data = load(filename, map_location='cpu')
     except Exception as err:
       # ignore error about incomplete data, since file may still be written to; otherwise report it.
-      if not insinstance(err, RuntimeError) or 'storage has wrong size' not in str(err):
-        warnings.warn("Error loading visualization data from " + filename + ":\n" + repr(err))
+      if not isinstance(err, RuntimeError) or 'storage has wrong size' not in str(err):
+        logging.exception("Error loading visualization data from " + filename)
 
     func_name = data['func']
     args = data['args']
@@ -83,19 +75,28 @@ class Visualizations():
       panels = []
 
       try:
-        module = runpy.run_path(source_file)
+        # load module from file, unless it's cached already
+        if source_file in self.modules:
+          module = self.modules[source_file]
+        else:
+          module = runpy.run_path(source_file)
 
         try:
+          # call the custom function, only if the module loaded successfully
           panels = module[func_name](name, *args, **kwargs)
-        except Exception as err:
-          warnings.warn('Error executing visualization function ' + func_name + ' from ' + source_file + ':\n' + repr(err))
+          
+          # cache module if no error so far (otherwise reload next time, maybe it's fixed)
+          self.modules[source_file] = module
 
-      except Exception as err:
-        warnings.warn('Error loading visualization function from ' + source_file + ':\n' + repr(err))
+        except Exception:
+          logging.exception('Error executing visualization function ' + func_name + ' from ' + source_file)
 
-    # ensure a list is returned, and wrap plots in appropriate Qt widgets
+      except Exception:
+        logging.exception('Error loading visualization function from ' + source_file)
+
+    # ensure a list is returned
     if not isinstance(panels, list): panels = [panels]
-    return [wrap_plot(panel) for panel in panels]
+    return panels
 
   def update(self):
     # called by a timer to check for updates. don't update if the experiment is finished.
@@ -115,33 +116,52 @@ class Visualizations():
       # load the list of visualizations and their refresh counts
       vis_counts = self.read_vis_counts(self.selected_exp)
 
-      plotsize = self.window.size_slider.value()
-      layout = self.window.flow_layout
-
       # check if any of them is new or its count changed
       for (name, count) in vis_counts.items():
         if name not in self.vis_counts or self.vis_counts[name] != count:
           # load the new data
           new_plots = self.load_single_vis(self.selected_exp, name)
-          old_panels = self.panels.get(name, None)
+          
+          # assign each plot to a new or reused panel.
+          # NOTE: most of this complicated logic is to deal with a specific MatPlotLib/
+          # FigureCanvas bug. we cannot delete a FigureCanvas and assign a new one to the
+          # same figure, or there are many graphical glitches (especially related to DPI).
+          # to avoid this, we reuse the same widget (actually the parent panel widget) to
+          # the same MatPlotLib figure every time (stored as overboard_panel attribute).
+          new_panels = []
+          old_panels = self.panels.get(name, [])
+          next_idx = 0  # next available panel to reuse
 
-          if old_panels is None or len(old_panels) == 0 or len(old_panels) != len(new_plots):
-            # remove any previous widgets and add new ones, if they differ in number or are entirely new
-            for widget in old_panels:
-              widget.setParent(None)
-              widget.deleteLater()
-            self.panels[name] = [self.window.add_panel(plot, name) for plot in new_plots]
-          else:
-            # try to replace the contents of existing panels, to keep their order
-            for (panel, plot) in zip(old_panels, new_plots):
-              vbox = panel.layout()
-              vbox.itemAt(0).widget().deleteLater()
-              vbox.addWidget(plot)
-              panel.plot_widget = plot
+          for plot in new_plots:
+            if type(plot).__name__ == 'Figure' and hasattr(plot, 'overboard_panel'):
+              # always reuse a previous panel for MPL figures
+              panel = self.window.add_panel(plot.overboard_panel, name, reuse=True)
+              panel.plot_widget.draw()  # ensure the figure is redrawn
+            else:
+              # not MPL, try to reuse a panel. first, skip over any existing MPL panels
+              while next_idx < len(old_panels) and old_panels[next_idx].is_mpl_figure:
+                next_idx += 1
+              
+              if next_idx < len(old_panels):
+                # we can reuse this one. it contains a pg.GraphicsLayoutWidget.
+                panel = old_panels[next_idx]
+                panel.plot_widget.clear()
+                panel.plot_widget.addItem(plot)
+                panel = self.window.add_panel(panel, name, reuse=True)
+
+              else:
+                # create a new panel
+                panel = self.add_vis_panel(plot, name)
+            new_panels.append(panel)
+          
+          # remove any panels we did not reuse from the layout
+          self.delete_vis_panels(list(set(old_panels) - set(new_panels)))
+          self.panels[name] = new_panels
 
   def select(self, exp):
     # select a new experiment, showing its visualizations (and removing previously selected ones)
     self.selected_exp = exp
+    self.modules = {}  # always reload modules when selecting, in case they're stale
     new_panels = []
     if exp is not None:
       # load master list of visualizations (and their counts), then load each one
@@ -150,15 +170,13 @@ class Visualizations():
       for name in vis_counts.keys():
         # load data into plots, and turn them into visible panels
         plots = self.load_single_vis(exp, name)
-        panels = [self.window.add_panel(plot, name, add_to_layout=False) for plot in plots]
+        panels = [self.add_vis_panel(plot, name, add_to_layout=False) for plot in plots]
         new_panels.append((name, panels))
 
     new_panels = OrderedDict(new_panels)
 
     # remove previous widgets (this is done after loading the visualizations to reduce delay)
-    for panel in self.all_panels():
-      panel.setParent(None)
-      panel.deleteLater()
+    self.delete_vis_panels(self.all_panels())
 
     # add the new widgets to the flow layout, in order
     self.panels = new_panels
@@ -170,6 +188,32 @@ class Visualizations():
   def all_panels(self):  # flatten nested list of panels
     if len(self.panels) == 0: return []  # special case
     return [p for panels in self.panels.values() for p in panels]
+    
+  def add_vis_panel(self, plot, name, add_to_layout=True):
+    # wrap MatPlotLib figure or PyQtGraph PlotItem in a Qt widget
+    is_mpl_figure = (type(plot).__name__ == 'Figure')
+    if is_mpl_figure:
+      widget = FigureCanvas(plot)
+    else:
+      widget = pg.GraphicsLayoutWidget()
+      widget.addItem(plot)
+
+    # wrap that in a panel with title
+    panel = self.window.add_panel(widget, name, add_to_layout=add_to_layout)
+
+    panel.is_mpl_figure = is_mpl_figure
+    if is_mpl_figure:
+      plot.overboard_panel = panel  # always associate the same panel with this figure
+
+    return panel
+  
+  def delete_vis_panels(self, panels):
+    # remove panels from the layout. MPL panels cannot be deleted, they need to
+    # be reused if the same figure is displayed. note self.panels is not updated.
+    for panel in panels:
+      panel.setParent(None)
+      if not panel.is_mpl_figure:
+        panel.deleteLater()
 
   def read_vis_counts(self, exp):
     # read and return visualizations list, including their update counts
@@ -199,8 +243,8 @@ def tshow(tensor, create_window=True, title='Tensor', data_range=None, grayscale
     data_range = (tensor.min(), tensor.max())
 
   if len(tensor.shape) > 4:
-    warnings.warn('Cannot show tensors with more than 4 dimensions.')
-    return
+    logging.exception('Cannot show tensors with more than 4 dimensions.')
+    return None
 
   # insert singleton dimensions on the left to always get 4 dimensions
   while len(tensor.shape) < 4:

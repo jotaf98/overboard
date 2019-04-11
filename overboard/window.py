@@ -118,14 +118,18 @@ class Window(QtWidgets.QMainWindow):
     self.resize(screen_size.width() * 0.6, screen_size.height() * 0.95)
     self.setWindowTitle('OverBoard - ' + args.folder)
 
-  def add_panel(self, widget, title, add_to_layout=True):
+  def add_panel(self, widget, title, add_to_layout=True, reuse=False):
     # adds a panel to the FlowLayout (main plots display), containing a widget (e.g. FigureCanvas).
     # first, create a QGroupBox around it, to show the title
-    vbox = QtWidgets.QVBoxLayout()
-    vbox.addWidget(widget)
-    panel = QtWidgets.QGroupBox(title)
-    panel.setLayout(vbox)
-    panel.plot_widget = widget  # keep a reference to the inner widget
+    if not reuse:
+      vbox = QtWidgets.QVBoxLayout()
+      vbox.addWidget(widget)
+      panel = QtWidgets.QGroupBox(title)
+      panel.setLayout(vbox)
+      panel.plot_widget = widget  # keep a reference to the inner widget
+    else:
+      panel = widget  # reusing a previous panel (less common)
+      panel.setTitle(title)
     
     # set the size
     plotsize = self.size_slider.value()

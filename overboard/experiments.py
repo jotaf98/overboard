@@ -1,5 +1,5 @@
 
-import collections, json, glob, re, warnings
+import collections, json, glob, re, logging
 import numpy as np
 from os import path as os_path
 
@@ -35,8 +35,8 @@ class Experiment():
       next(self.read_data)
     except StopIteration:
       pass
-    except IOError as err:
-      warnings.warn('Error reading ' + self.filename + ':\n' + repr(err))
+    except IOError:
+      logging.exception('Error reading ' + self.filename)
   
   def read_data_fast(self):  # generator function
     # polls the file for new data, bu keeps the file handle open
