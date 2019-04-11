@@ -34,7 +34,7 @@ def show_prediction(name, image, target, prediction):
     # update an existing plot (fast)
     (figure, image_obj, bar_obj) = figures[name]
     image_obj.set_array(image)
-    for i in len(bar_obj):
+    for i in range(len(bar_obj)):
       bar_obj[i].set_height(prediction[i])
       bar_obj[i].set_color(bar_colors[i])
 
