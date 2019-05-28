@@ -59,6 +59,7 @@ class Visualizations():
       # ignore error about incomplete data, since file may still be written to; otherwise report it.
       if not isinstance(err, RuntimeError) or 'storage has wrong size' not in str(err):
         logging.exception("Error loading visualization data from " + filename)
+        return []
 
     func_name = data['func']
     args = data['args']
@@ -224,7 +225,7 @@ class Visualizations():
           values = line.split('\t')
           if len(values) == 2:
             vis_counts[values[0]] = int(values[1])  # the format is: "name count\n"
-    except FileNotFoundError:
+    except:
       pass
     return vis_counts
 
