@@ -132,7 +132,8 @@ class Plots():
         line_id = plot['line']
         if line_id in panel.plots_dict:
           # remove it
-          panel.removeItem(panel.plots_dict[line_id])
+          plot_item = panel.plot_widget.getPlotItem()
+          plot_item.removeItem(panel.plots_dict[line_id])
           del panel.plots_dict[line_id]
         
         # if the last line was deleted, delete the panel too
