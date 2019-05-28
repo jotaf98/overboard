@@ -1,5 +1,5 @@
 
-import os, math, datetime, time, json, inspect, shutil
+import os, math, datetime, time, json, inspect, shutil, re
 
 try:
   from torch import save
@@ -12,16 +12,23 @@ except ImportError:
 
 
 class Logger:
-  def __init__(self, directory, stat_names=None, meta=None, index_name="iteration", save_timestamp=True):
+  def __init__(self, directory, stat_names=None, meta=None, index_name="iteration", save_timestamp=True, resume=False):
     """Initialize log writer on a new directory.
        The main file that is written is "stats.csv", containing one column for each stat."""
     if stat_names and not (all(isinstance(name, str) and not ',' in name for name in stat_names)):
       raise ValueError('stat_names must be a list of strings with no commas, if specified.')
     self.file = None
     self.directory = directory
-    self.stat_names = stat_names  # can be omitted (will be set on first append() call)
     self.index_name = index_name
-    self.count = 0
+    self.resume = resume
+    if not resume:
+      self.count = 0
+      self.stat_names = stat_names  # can be omitted (will be set on first append() call)
+    else:
+      # append to a previous log. we need to get some info first.
+      (self.stat_names, self.count) = self._read_previous()
+      if stat_names is not None and stat_names != self.stat_names:
+        raise ValueError("Attempting to resume writing to a log with different metrics (stats_names) than those given in the Logger constructor.")
 
     # for averaging stats before appending to the log
     self.avg_accum = {}
@@ -203,8 +210,10 @@ class Logger:
 
   def _start_write(self):
     # open CSV file and write header
-    self.file = open(self.directory + '/stats.csv', 'w')
-    self.file.write(self.index_name + ',' + ','.join(self.stat_names) + '\n')  # header
+    mode = ('a' if self.resume else 'w')
+    self.file = open(self.directory + '/stats.csv', mode)
+    if not self.resume:
+      self.file.write(self.index_name + ',' + ','.join(self.stat_names) + '\n')  # header
   
   def _finish_write(self):
     # close CSV file
@@ -216,6 +225,24 @@ class Logger:
     if not self.meta['_done']:
       self.meta['_done'] = True
       self._save_meta()
+  
+  def _read_previous(self):
+    # read count and stat names from an existing CSV file (to continue writing)
+    with open(self.directory + '/stats.csv', 'r') as file:
+      (stat_names, last_line) = (None, '')
+
+      for line in file:
+        # read CSV file header (with stat names). they're separated by commas, which can be escaped: \,
+        if stat_names is None:
+          stat_names = re.split(r'(?<!\\),', line.strip())
+          if len(stat_names) < 2: raise IOError('CSV has too few headers.')
+          stat_names = stat_names[1:]  # ignore iteration count header
+        else:
+          last_line = line
+
+      # read iteration count from last line
+      count = int(last_line.split(',')[0])
+    return (stat_names, count)
 
   def _save_meta(self):
     # write metadata to JSON file
