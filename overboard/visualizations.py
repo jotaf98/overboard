@@ -249,7 +249,7 @@ def tshow(tensor, create_window=True, title='Tensor', data_range=None, grayscale
 
   # insert singleton dimensions on the left to always get 4 dimensions
   while len(tensor.shape) < 4:
-    tensor.unsqueeze_(0)
+    tensor = tensor.unsqueeze(0)
 
   sh = tensor.shape
   if sh[0] == 1:  # case of 3D tensors, leave singleton dimension for color
