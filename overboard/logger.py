@@ -1,5 +1,6 @@
 
-import os, math, datetime, time, json, inspect, shutil, re
+import os, math, time, json, inspect, shutil, re
+from datetime import datetime, timezone
 
 try:
   from torch import save
@@ -11,24 +12,25 @@ except ImportError:
       pickle.dump(obj, file, pickle.HIGHEST_PROTOCOL)
 
 
+def get_timestamp(microseconds=True):
+  """Current timestamp in UTC timezone (no daylight savings, etc)"""
+  t = datetime.now(timezone.utc)
+  if not microseconds: t = t.replace(microsecond=0)
+  return str(t)
+
+
 class Logger:
-  def __init__(self, directory, stat_names=None, meta=None, index_name="iteration", save_timestamp=True, resume=False):
+  def __init__(self, directory, stat_names=None, meta=None, save_timestamp=True, resume=False):
     """Initialize log writer on a new directory.
        The main file that is written is "stats.csv", containing one column for each stat."""
+
     if stat_names and not (all(isinstance(name, str) and not ',' in name for name in stat_names)):
       raise ValueError('stat_names must be a list of strings with no commas, if specified.')
-    self.file = None
+
     self.directory = directory
-    self.index_name = index_name
     self.resume = resume
-    if not resume:
-      self.count = 0
-      self.stat_names = stat_names  # can be omitted (will be set on first append() call)
-    else:
-      # append to a previous log. we need to get some info first.
-      (self.stat_names, self.count) = self._read_previous()
-      if stat_names is not None and stat_names != self.stat_names:
-        raise ValueError("Attempting to resume writing to a log with different metrics (stats_names) than those given in the Logger constructor.")
+    self.wrote_header = False
+    self.stat_names = None  # set later
 
     # for averaging stats before appending to the log
     self.avg_accum = {}
@@ -36,12 +38,12 @@ class Logger:
 
     # meta should be a dict or a Namespace object from argparse
     if meta is None:
-      meta = {}  # ensure it's a new instance (default arguments all refer to the same instance)
+      meta = {}  # ensure it's a new dict instance (default arguments all refer to the same instance)
     elif meta.__class__.__name__ == 'Namespace':  # check type without importing argparse
       meta = vars(meta)
     elif not isinstance(meta, dict):
       raise AssertionError("Meta should be a dictionary or argparse.Namespace.")
-    meta['_done'] = False
+
     self.meta = meta
     self.save_timestamp = save_timestamp
 
@@ -58,10 +60,27 @@ class Logger:
 
     # get current timestamp as string, including timezone offset
     if self.save_timestamp:
-      self.meta['timestamp'] = str(datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0))
+      self.meta['timestamp'] = get_timestamp(microseconds=False)
     
-    # write arguments to JSON file
-    self._save_meta()
+    # write metadata to JSON file
+    if self.meta:
+      with open(self.directory + '/meta.json', 'w') as file:
+        json.dump(self.meta, file)
+    
+    # read existing CSV file and verify integrity
+    if self.resume:
+      (self.stat_names, lines) = self._read_file(ignore_empty=True)
+
+      if stat_names is not None and stat_names != self.stat_names:
+        raise ValueError("Attempting to resume writing to a log with different metrics (stats_names) than those given in the Logger constructor.")
+
+    # clear and open CSV file in binary mode (fixes line end to '\n')
+    self.file = open(self.directory + '/stats.csv', 'wb')
+    
+    # write back any previous data (including header)
+    if self.resume:
+      self.file.writelines(lines)
+      self.wrote_header = True
 
   def append(self, points=None):
     """Write the given stats dict to CSV file. If none is given, the average values computed so far are used (see update_average)."""
@@ -80,12 +99,13 @@ class Logger:
         if name not in self.stat_names:
           raise ValueError('Unknown stat name: ' + name + '. Note that no new stats can be added after the first Logger.append call. Alternatively, they can be specified in the constructor.')
 
-    if self.file is None:
-      self._start_write()
+    # write header if not done yet
+    if not self.wrote_header:
+      self.file.write('time,' + ','.join(self.stat_names) + '\n')
+      self.wrote_header = True
 
-    # first element is always the iteration
-    self.count += 1
-    self.file.write(str(self.count))
+    # first element is always the time
+    self.file.write(get_timestamp())
 
     # write remaining stat values
     for name in self.stat_names:
@@ -195,6 +215,40 @@ class Logger:
       self.time = -math.inf
       return False
 
+  def _read_file(self, ignore_empty=False):
+    """Read CSV file, validating number of values per line. Empty/missing files can optionally be ignored.
+    Returns the header (list of column names) and a list of lines (as strings, for easy re-writing)."""
+
+    try:
+      # need to return lines, so read them all at once
+      with open(self.directory + '/stats.csv', 'rb') as file:
+        lines = file.readlines()
+
+      if len(lines) == 0:  # empty file
+        raise OSError()
+
+    except OSError:  # ignore or keep error
+      if ignore_empty:
+        return ([], None)
+      else:
+        raise
+    
+    # read CSV file header (with stat names). they're separated by commas, which can be escaped: \,
+    stat_names = re.split(r'(?<!\\),', lines[0].strip())
+    if len(stat_names) == 0:
+      raise IOError('CSV file has empty header.')
+
+    # if the last line is empty (which marks an experiment as done), take it out now
+    if len(lines[-1].strip()) == 0:
+      del lines[-1]
+
+    # validate the number of values in each line. they're floats, so no escaping is needed
+    for (index, line) in enumerate(lines[1:]):  # skip header line
+      if len(line.strip().split(',') != len(stat_names):
+        raise IOError('Line %i in CSV file has a different number of values than the header (file is possibly corrupt).' % (index + 1))
+
+    return (stat_names, lines)
+
   # note about "with" statement/destructors:
   # this class can be used either with a "with" statement, or without.
   # the first is preferred in Python, but the second is still ok in this case for two reasons:
@@ -208,44 +262,9 @@ class Logger:
   def __del__(self):
     self._finish_write()
 
-  def _start_write(self):
-    # open CSV file and write header
-    mode = ('a' if self.resume else 'w')
-    self.file = open(self.directory + '/stats.csv', mode)
-    if not self.resume:
-      self.file.write(self.index_name + ',' + ','.join(self.stat_names) + '\n')  # header
-  
   def _finish_write(self):
-    # close CSV file
-    if self.file is not None:
+    # mark experiment as done by writing an extra line break at the end of the CSV file, and close it
+    if not self.file.closed:
+      self.file.write('\n')
       self.file.close()
-      self.file = None
-
-    # mark experiment as done, and write to JSON file
-    if not self.meta['_done']:
-      self.meta['_done'] = True
-      self._save_meta()
-  
-  def _read_previous(self):
-    # read count and stat names from an existing CSV file (to continue writing)
-    with open(self.directory + '/stats.csv', 'r') as file:
-      (stat_names, last_line) = (None, '')
-
-      for line in file:
-        # read CSV file header (with stat names). they're separated by commas, which can be escaped: \,
-        if stat_names is None:
-          stat_names = re.split(r'(?<!\\),', line.strip())
-          if len(stat_names) < 2: raise IOError('CSV has too few headers.')
-          stat_names = stat_names[1:]  # ignore iteration count header
-        else:
-          last_line = line
-
-      # read iteration count from last line
-      count = int(last_line.split(',')[0])
-    return (stat_names, count)
-
-  def _save_meta(self):
-    # write metadata to JSON file
-    with open(self.directory + '/meta.json', 'w') as file:
-      json.dump(self.meta, file)
   
