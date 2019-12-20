@@ -11,19 +11,21 @@ from PyQt5.Qt import QPalette, QColor
 #QtWidgets.QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
 import os
+from time import time
 
 from .flowlayout import FlowLayout
 from .fastslider import Slider
-from .experiments import Smoother
+from .plots import Smoother
 
 
 class Window(QtWidgets.QMainWindow):
   def __init__(self, args):
     super(Window, self).__init__(parent=None)
     
-    self.experiments = {}  # filled in later
+    self.experiments = None  # object that manages experiments
     self.plots = None  # object that manages plots
     self.visualizations = None  # object that manages custom visualizations
+    self.last_process_events = time()  # to update during heavy loads
 
     # get screen size
     screen_size = QtWidgets.QDesktopWidget().availableGeometry(self).size()
@@ -91,13 +93,18 @@ class Window(QtWidgets.QMainWindow):
     table.itemClicked.connect(self.table_click)
     table.itemSelectionChanged.connect(self.table_select)
 
-    sidebar.addWidget(table)
-    self.table = table
     self.table_args = {}  # maps argument names to column indices
-    #self.table_exps = {}  # maps experiment names to rows as table_exps[name].row() (even as it's sorted)
-    self.prev_sort = None
-    self.selected_exp = None
+    
+    # create timestamp column in table (third) and sort by it
+    table.setColumnCount(3)
+    table.setHorizontalHeaderItem(2, QtWidgets.QTableWidgetItem('timestamp'))
+    table.sortItems(2, Qt.DescendingOrder)
+    self.table_args['timestamp'] = 2
 
+    self.table = table
+    self.selected_exp = None
+    sidebar.addWidget(table)
+    
     # create the scroll area with plots
     (plot_scroll_widget, plot_scroll_area) = create_scroller()
     main.addWidget(plot_scroll_area)
@@ -117,6 +124,11 @@ class Window(QtWidgets.QMainWindow):
     # window size and title
     self.resize(screen_size.width() * 0.6, screen_size.height() * 0.95)
     self.setWindowTitle('OverBoard - ' + args.folder)
+
+  def process_events_if_needed(self):
+    if time() - self.last_process_events > 0.5:  # limit to once every 0.5 seconds      
+      QtWidgets.QApplication.processEvents()
+      self.last_process_events = time()
 
   def add_panel(self, widget, title, add_to_layout=True, reuse=False):
     # adds a panel to the FlowLayout (main plots display), containing a widget (e.g. FigureCanvas).
@@ -141,20 +153,15 @@ class Window(QtWidgets.QMainWindow):
 
     return panel
   
-  def add_experiment(self, exp, refresh_table=True):
-    # ensure it has a style assigned, even if it has no plots
-    (exp.style_order, exp.style) = self.plots.get_style()
 
-    # add experiment to plots
-    self.plots.add(exp.enumerate_plots())
-    self.experiments[exp.name] = exp
-
+  def on_exp_init(self, exp):
+    """Called by Experiment when it is initialized"""
     # add experiment to table
     (table, table_args) = (self.table, self.table_args)
     header = table.horizontalHeader()
 
-    # disable sorting to prevent bug when adding items. will be restored by refresh_table.
-    self.prev_sort = (header.sortIndicatorSection(), header.sortIndicatorOrder())  # save state
+    # disable sorting to prevent bug when adding items, to restore afterwards
+    prev_sort = (header.sortIndicatorSection(), header.sortIndicatorOrder())
     table.setSortingEnabled(False)
 
     # new row
@@ -162,7 +169,7 @@ class Window(QtWidgets.QMainWindow):
     table.insertRow(row)
 
     # persistent mapping between an experiment and its row (even as they're sorted)
-    #self.table_exps[exp.name] = QtCore.QPersistentModelIndex(table.model().index(row, 0))
+    exp.table_row = QtCore.QPersistentModelIndex(table.model().index(row, 0))
 
     # create icon (label with unicode symbol) with the plot color. u'\u2611 \u2610'
     icon = self.set_table_cell(row, 0, u'\u2611', selectable=False)
@@ -171,10 +178,20 @@ class Window(QtWidgets.QMainWindow):
     icon.setData(Qt.UserRole, 'hide')
     icon.setData(Qt.UserRole + 1, exp.name)
 
-    # experiment name
+    # show experiment name
     self.set_table_cell(row, 1, exp.name)
 
-    # print a row of argument values for this experiment
+    # restore sorting, and sort state (which column and direction)
+    table.setSortingEnabled(True)
+    table.sortItems(*prev_sort)
+
+    self.process_events_if_needed()
+
+  def on_exp_meta_ready(self, exp):
+    """Called by Experiment when the meta-data has been read"""
+    # print a row of meta-data (argument) values for this experiment in the table
+    (table, table_args) = (self.table, self.table_args)
+    added_columns = False
     for arg_name in exp.meta.keys():
       if not arg_name.startswith('_'):
         if arg_name not in table_args:  # a new argument name, add a column
@@ -182,14 +199,18 @@ class Window(QtWidgets.QMainWindow):
           table.setColumnCount(col + 1)
           table.setHorizontalHeaderItem(col, QtWidgets.QTableWidgetItem(arg_name))  #, QtWidgets.QTableWidgetItem.Type
           table_args[arg_name] = col
+          added_columns = True
         else:
           col = table_args[arg_name]
         
-        self.set_table_cell(row, col, exp.meta.get(arg_name, ''))
+        self.set_table_cell(exp.table_row.row(), col, exp.meta.get(arg_name, ''))
 
-    if refresh_table:
-      self.refresh_table()
+    if added_columns:
+      self.resize_table()
+
+    self.process_events_if_needed()
   
+
   def set_table_cell(self, row, col, value, selectable=True):
     # helper to set a single table cell in the sidebar.
     # try to interpret as integer or float, to allow numeric sorting of columns
@@ -214,16 +235,12 @@ class Window(QtWidgets.QMainWindow):
     self.table.setItem(row, col, item)
     return item
 
-  def refresh_table(self):
-    # restore sorting
+  def resize_table(self):
+    """Resize the column headers to fully contain the header text
+    (note that Qt's resizeColumnsToContents ignores the headers)"""
     table = self.table
-    table.setSortingEnabled(True)
-    if self.prev_sort:  # restore sort state (which column and direction)
-      table.sortItems(*self.prev_sort)
-
     table.resizeColumnsToContents()
     
-    # resize the column headers to fully contain the header text (resizeColumnsToContents ignores the headers)
     max_width = int(0.9 * table.parentWidget().width())  # don't let any column become wider than 90% of the sidebar
     header = table.horizontalHeader()
     metrics = QtGui.QFontMetrics(table.horizontalHeaderItem(0).font())
@@ -231,24 +248,13 @@ class Window(QtWidgets.QMainWindow):
       text = table.horizontalHeaderItem(col).text()
       text_width = metrics.boundingRect(text).width()
       header.resizeSection(col, min(max_width, max(table.sizeHintForColumn(col), text_width + 20)))  # needs some extra width
-  
-  def sort_table_by_timestamp(self, refresh_table=True):
-    # convenience function called at initialization to move the timestamp column to the start, and sort it
-    if 'timestamp' in self.table_args:
-      header = self.table.horizontalHeader()
-      col = self.table_args['timestamp']  # (logical) column index of timestamp
-      header.moveSection(col, 2)  # move to the start (after the icon and experiment name)
-      self.prev_sort = (col, Qt.DescendingOrder)  # refresh_table will sort using this column and order
-      
-    if refresh_table:
-      self.refresh_table()
 
   def table_click(self, item):
     # check if there's an action associated with this cell
     action = item.data(Qt.UserRole)
     if action:
       name = item.data(Qt.UserRole + 1)
-      exp = self.experiments[name]
+      exp = self.experiments.exps[name]
       if action == 'hide':
         # toggle visibility of a given experiment, if the icon is clicked
         if exp.visible:
@@ -299,7 +305,7 @@ class Window(QtWidgets.QMainWindow):
     # check left-most cell of the given row to get the associated experiment name
     leftmost = self.table.item(row, 0)
     name = leftmost.data(Qt.UserRole + 1)
-    return self.experiments[name]
+    return self.experiments.exps[name]
   
   def size_slider_changed(self):
     # resize plots and visualizations
@@ -312,8 +318,8 @@ class Window(QtWidgets.QMainWindow):
         panel.setFixedWidth(plotsize)
         panel.setFixedHeight(plotsize)
   
-  def smooth_slider_changed(self):
-    self.smoother = Smoother(self.smooth_slider.value() / 4.0)
+  #def smooth_slider_changed(self):
+  #  self.smoother = Smoother(self.smooth_slider.value() / 4.0)
 
 
 def create_scroller():

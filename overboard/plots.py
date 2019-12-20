@@ -10,11 +10,13 @@ import PyQt5.QtGui as QtGui
 from itertools import product, cycle, count
 from functools import partial
 import heapq, logging
+from datetime import datetime
 import numpy as np
 
 import pyqtgraph as pg
 
 from .plotwidget import create_plot_widget
+from .pg_time_axis import timestamp, DateAxisItem
 
 # define lists of styles to cycle
 palette = ["#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B3", "#937860", "#DA8BC3", "#8C8C8C", "#CCB974", "#64B5CD"]
@@ -57,6 +59,10 @@ class Plots():
     # e.g.: plots.add(exp.enumerate_plots())
     plotsize = None
     for plot in plots:
+      # get data points
+      exp = plot['exp']
+      (xs, ys) = (exp.data[exp.names.index(plot['x'])], exp.data[exp.names.index(plot['y'])])
+
       # check if panel exists. there's a different panel for each x coordinate (e.g. iterations, time)
       panel_id = (plot['panel'], plot['x'])
       if panel_id not in self.panels:
@@ -85,12 +91,24 @@ class Plots():
         panel.cursor_label = label
 
         self.panels[panel_id] = panel
+
+        # create time axes if needed
+        if len(xs) > 0 and isinstance(xs[0], datetime):
+          axis = DateAxisItem(orientation='bottom')
+          axis.attachToPlotItem(plot_widget.getPlotItem())
+
+        if len(ys) > 0 and isinstance(ys[0], datetime):
+          axis = DateAxisItem(orientation='left')
+          axis.attachToPlotItem(plot_widget.getPlotItem())
+
       else:
         panel = self.panels[panel_id]  # reuse existing panel
       
-      # get data points
-      exp = plot['exp']
-      (xs, ys) = (exp.data[exp.names.index(plot['x'])], exp.data[exp.names.index(plot['y'])])
+      # convert timedates to numeric values if needed
+      if len(xs) > 0 and isinstance(xs[0], datetime):
+        xs = [timestamp(x) for x in xs]
+      if len(ys) > 0 and isinstance(ys[0], datetime):
+        ys = [timestamp(y) for y in ys]
 
       # allow overriding the style
       style = exp.style
@@ -142,17 +160,6 @@ class Plots():
           panel.deleteLater()
           del self.panels[panel_id]
 
-  def update_plots(self, experiments):
-    # called by a timer to update plots periodically
-      for exp in experiments:
-        try:
-          if not exp.done and next(exp.read_data):  # check if there's new data in the file
-            self.add(exp.enumerate_plots())  # update plots
-        except IOError:
-          logging.exception('Error reading ' + exp.filename)
-        except StopIteration:
-          pass
-
 
 def mouse_move(event, panel):
   # select curves when hovering them, and update mouse cursor
@@ -198,9 +205,9 @@ def mouse_move(event, panel):
     names = [name for (name, line) in panel.plots_dict.items() if line is selected]  # ideally should return only 1
     names = ' '.join(names)
     # this trick prints floats with 3 significant digits and no sci notation (e.g. 1e-4). also consider integers.
-    if x.is_integer(): x = str(int(x))
+    if x % 1 == 0: x = str(int(x))
     else: x = float('%.3g' % x)
-    if y.is_integer(): y = str(int(y))
+    if y % 1 == 0: y = str(int(y))
     else: y = float('%.3g' % y)
     text = "%s<br/>(%s, %s)" % (names, x, y)
   else:
@@ -214,3 +221,26 @@ def mouse_leave(event, panel):
   # hide cursor when the mouse leaves
   panel.cursor_vline.setVisible(False)
 
+
+
+class Smoother():
+  def __init__(self, bandwidth, half_window=None):
+    if bandwidth == 0:
+      self.kernel = None
+    else:
+      if half_window is None:
+        half_window = int(np.ceil(bandwidth * 2))
+      self.kernel = np.exp(-np.arange(-half_window, half_window + 1)**2 / bandwidth**2)
+    self.changed = True
+
+  def do(self, x):
+    if not isinstance(x, np.ndarray):
+      x = np.array(x)
+    if self.kernel is None or len(x) == 0:
+      return x
+    # dividing by the convolution of the kernel with a signal of all-ones handles correctly the lack of points at the edges (without biasing to a particular value)
+    y = np.convolve(x, self.kernel, mode='same') / np.convolve(np.ones_like(x), self.kernel, mode='same')
+    if len(self.kernel) > len(x):  # crop if larger (happens when filter is larger than signal, see np.convolve)
+      start = len(y) // 2 - len(x) // 2
+      y = y[start : start + len(x)]
+    return y

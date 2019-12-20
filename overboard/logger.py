@@ -74,8 +74,8 @@ class Logger:
       if stat_names is not None and stat_names != self.stat_names:
         raise ValueError("Attempting to resume writing to a log with different metrics (stats_names) than those given in the Logger constructor.")
 
-    # clear and open CSV file in binary mode (fixes line end to '\n')
-    self.file = open(self.directory + '/stats.csv', 'wb')
+    # clear and open CSV file
+    self.file = open(self.directory + '/stats.csv', 'w')
     
     # write back any previous data (including header)
     if self.resume:
@@ -244,7 +244,7 @@ class Logger:
 
     # validate the number of values in each line. they're floats, so no escaping is needed
     for (index, line) in enumerate(lines[1:]):  # skip header line
-      if len(line.strip().split(',') != len(stat_names):
+      if len(line.strip().split(',')) != len(stat_names):
         raise IOError('Line %i in CSV file has a different number of values than the header (file is possibly corrupt).' % (index + 1))
 
     return (stat_names, lines)
