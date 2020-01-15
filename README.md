@@ -2,7 +2,7 @@
 Pure Python dashboard for monitoring deep learning experiments (like TensorBoard for PyTorch/MXNet/etc, without a browser)
 
 <p align="center">
-<img align="center" alt="editor" src="https://github.com/jotaf98/overboard/blob/master/demo.gif" />
+<img align="center" alt="editor" src="https://raw.githubusercontent.com/jotaf98/overboard/master/demo.gif" />
 </p>
 
 ## Features
