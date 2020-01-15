@@ -146,22 +146,11 @@ class Experiment():
 
     # update plots
     if self.visible:
-      self.window.plots.add(self.enumerate_plots())
+      self.window.plots.add(self)
 
   def on_done(self):
     # mark experiment as done. this signal is also sent to the QThread's quit slot, so it ends.
     self.done = True
-
-  def enumerate_plots(self):
-    # return list of plots and where/how to draw them, could be user-configured
-    return [{
-      'panel': y_name,
-      'line': self.name,
-      'x': self.names[0],
-      'y': y_name,
-      'exp': self,
-      'width': 4 if self.is_selected else 2
-    } for y_name in self.names[1:]]
 
 
 

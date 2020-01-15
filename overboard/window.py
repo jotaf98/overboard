@@ -157,7 +157,7 @@ class Window(QtWidgets.QMainWindow):
   def on_exp_init(self, exp):
     """Called by Experiment when it is initialized"""
     # add experiment to table
-    (table, table_args) = (self.table, self.table_args)
+    table = self.table
     header = table.horizontalHeader()
 
     # disable sorting to prevent bug when adding items, to restore afterwards
@@ -259,7 +259,7 @@ class Window(QtWidgets.QMainWindow):
         # toggle visibility of a given experiment, if the icon is clicked
         if exp.visible:
           # remove all associated plots
-          self.plots.remove(exp.enumerate_plots())
+          self.plots.remove(exp)
 
           # reset icon and style, allowing it to be used by other experiments
           item.setForeground(QColor(128, 128, 128))
@@ -274,7 +274,7 @@ class Window(QtWidgets.QMainWindow):
           item.setText(u'\u2611')
 
           # create plots
-          self.plots.add(exp.enumerate_plots())
+          self.plots.add(exp)
 
         exp.visible = not exp.visible
 
@@ -290,11 +290,11 @@ class Window(QtWidgets.QMainWindow):
     if self.selected_exp and self.selected_exp != exp:
       self.selected_exp.is_selected = False
       if self.selected_exp.visible:  # update its view
-        self.plots.add(self.selected_exp.enumerate_plots())
+        self.plots.add(self.selected_exp)
 
     if items:  # select new one
       exp.is_selected = True
-      self.plots.add(exp.enumerate_plots())
+      self.plots.add(exp)
       self.selected_exp = exp
       self.visualizations.select(exp)
     else:

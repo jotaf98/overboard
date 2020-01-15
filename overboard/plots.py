@@ -55,20 +55,28 @@ class Plots():
     # return a style to the set of available ones
     heapq.heappush(self.unused_styles, (style_order, style))
 
-  def add(self, plots):
-    # e.g.: plots.add(exp.enumerate_plots())
+  def get_plot_info(self, exp):
+    x_name = exp.names[0]
+    return [{
+      'panel': (x_name, y_name),
+      'line': exp.name,
+      'x': x_name,
+      'y': y_name,
+      'width': 4 if exp.is_selected else 2
+    } for y_name in exp.names[1:]]
+
+  def add(self, exp):
+    plots = self.get_plot_info(exp)
     plotsize = None
     for plot in plots:
       # get data points
-      exp = plot['exp']
       (xs, ys) = (exp.data[exp.names.index(plot['x'])], exp.data[exp.names.index(plot['y'])])
 
       # check if panel exists. there's a different panel for each x coordinate (e.g. iterations, time)
-      panel_id = (plot['panel'], plot['x'])
-      if panel_id not in self.panels:
+      if plot['panel'] not in self.panels:
         # create new panel to contain plot.
         # if title not defined, use the panel ID (e.g. stat name)
-        title = str(plot.get('title', plot['panel']))
+        title = str(plot.get('title', plot['panel'][1]))
         plot_widget = create_plot_widget(title)
         panel = self.window.add_panel(plot_widget, title)
 
@@ -90,7 +98,7 @@ class Plots():
         label.anchor(itemPos=(0, 0), parentPos=(0, 0))
         panel.cursor_label = label
 
-        self.panels[panel_id] = panel
+        self.panels[plot['panel']] = panel
 
         # create time axes if needed
         if len(xs) > 0 and isinstance(xs[0], datetime):
@@ -102,7 +110,7 @@ class Plots():
           axis.attachToPlotItem(plot_widget.getPlotItem())
 
       else:
-        panel = self.panels[panel_id]  # reuse existing panel
+        panel = self.panels[plot['panel']]  # reuse existing panel
       
       # convert timedates to numeric values if needed
       if len(xs) > 0 and isinstance(xs[0], datetime):
@@ -139,12 +147,12 @@ class Plots():
         line.setData(xs, ys)
         line.setPen(pen)
   
-  def remove(self, plots):
+  def remove(self, exp):
+    plots = self.get_plot_info(exp)
     for plot in plots:
       # find panel
-      panel_id = (plot['panel'], plot['x'])
-      if panel_id in self.panels:
-        panel = self.panels[panel_id]
+      if plot['panel'] in self.panels:
+        panel = self.panels[plot['panel']]
 
         # find plot line
         line_id = plot['line']
@@ -158,7 +166,7 @@ class Plots():
         if len(panel.plots_dict) == 0:
           panel.setParent(None)
           panel.deleteLater()
-          del self.panels[panel_id]
+          del self.panels[plot['panel']]
 
 
 def mouse_move(event, panel):
