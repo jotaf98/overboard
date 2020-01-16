@@ -11,6 +11,7 @@ from itertools import product, cycle, count
 from functools import partial
 import heapq, logging
 from datetime import datetime
+from numbers import Number
 import numpy as np
 
 import pyqtgraph as pg
@@ -65,13 +66,20 @@ class Plots():
     panel_option = self.window.panel_dropdown.currentText()
 
     # some combinations are invalid, change to sensible defaults in those cases
-    if panel_option == "One per experiment":
+    if panel_option == "One per metric":
+      if x_option != "Panel metric" and y_option != "Panel metric":  # Panel metric is unused, so all panels would look the same
+        y_option = "Panel metric"
+        self.window.y_dropdown.setCurrentText(y_option)
+    
+    else:
+      # x/y_option "Panel metric" is only compatible with panel_option "One per metric"
       if x_option == "Panel metric":
         x_option = "First metric"
         self.window.x_dropdown.setCurrentText(x_option)
       if y_option == "Panel metric":
         y_option = "All metrics"
         self.window.y_dropdown.setCurrentText(y_option)
+
     if x_option == "All metrics" and y_option == "All metrics":
       x_option = "First metric"
       self.window.x_dropdown.setCurrentText(x_option)
@@ -80,14 +88,19 @@ class Plots():
     x_name = (exp.names[0] if x_option == "First metric" else x_option)
     y_name = (exp.names[0] if y_option == "First metric" else y_option)
 
-    # create list of panels, by metric or by experiment
+    # create list of panels by: metric, experiment, hyper-parameter type,
+    # value of a single hyper-parameter, or create a single panel
     if panel_option == "One per metric":
       panels = [(x_name, name) for name in exp.names]
-      if x_option != "Panel metric" and y_option != "Panel metric":
-        # panel metric is unused, so all panels would look the same; keep only one
-        panels = [(x_name, y_name)]
+
     elif panel_option == "One per experiment":
       panels = [(None, exp.name)]  # add() expects a tuple, using 2nd element for plot title
+    
+    elif panel_option == "Single panel":
+      panels = [(None, y_name + ' by ' + x_name)]
+    
+    else:  # single hyper-parameter selected, create one panel for each value
+      panels = [(None, panel_option + ' = ' + str(exp.meta[panel_option]))]
 
     info = []  # the list of lines to plot
     for panel in panels:  # possibly spread plots across panels
@@ -113,12 +126,8 @@ class Plots():
   def add(self, exp):
     """Creates or updates plots associated with given experiment, creating panels if needed"""
     plots = self.define_plots(exp)
-    plotsize = None
     for plot in plots:
-      # get data points
-      (xs, ys) = (exp.data[exp.names.index(plot['x'])], exp.data[exp.names.index(plot['y'])])
-
-      # check if panel exists. there's a different panel for each x coordinate (e.g. iterations, time)
+      # check if panel exists
       if plot['panel'] not in self.panels:
         # create new panel to contain plot
         title = plot['panel'][1]
@@ -145,23 +154,92 @@ class Plots():
 
         self.panels[plot['panel']] = panel
 
-        # create time axes if needed
-        if len(xs) > 0 and isinstance(xs[0], datetime):
-          axis = DateAxisItem(orientation='bottom')
-          axis.attachToPlotItem(plot_widget.getPlotItem())
-
-        if len(ys) > 0 and isinstance(ys[0], datetime):
-          axis = DateAxisItem(orientation='left')
-          axis.attachToPlotItem(plot_widget.getPlotItem())
-
       else:
         panel = self.panels[plot['panel']]  # reuse existing panel
+
+      plot_item = panel.plot_widget.getPlotItem()
       
-      # convert timedates to numeric values if needed
-      if len(xs) > 0 and isinstance(xs[0], datetime):
+      # get data points
+      if plot['x'] in exp.meta:
+        xs = [exp.meta[plot['x']]]  # a single point, with the chosen hyper-parameter
+      else:
+        xs = exp.data[exp.names.index(plot['x'])]  # several points, with the chosen metric
+
+      if plot['y'] in exp.meta:
+        ys = [exp.meta[plot['y']]]
+      else:
+        ys = exp.data[exp.names.index(plot['y'])]
+
+      # if one axis is a scalar (hyper-parameter) and another is not (metric), only show
+      # a single data point. use "scalar display" option to decide which metric to keep.
+      if len(xs) == 1 or len(ys) == 1:
+        scalar_option = self.window.scalar_dropdown.currentText()
+        if scalar_option == 'Last value':
+          if len(xs) > 1: xs = [xs[-1]]
+          if len(ys) > 1: ys = [ys[-1]]
+        elif scalar_option == 'Maximum':
+          if len(xs) > 1: xs = [max(xs)]
+          if len(ys) > 1: ys = [max(ys)]
+        elif scalar_option == 'Minimum':
+          if len(xs) > 1: xs = [min(xs)]
+          if len(ys) > 1: ys = [min(ys)]
+
+      assert len(xs) == len(ys)
+
+      # check data points' types to know what axes to create (numeric, time or categorical)
+      x_is_time = all(isinstance(x, datetime) for x in xs)
+      y_is_time = all(isinstance(y, datetime) for y in ys)
+      x_is_numeric = len(xs) == 0 or all(isinstance(x, Number) and not isinstance(x, bool) for x in xs)
+      y_is_numeric = len(xs) == 0 or all(isinstance(y, Number) and not isinstance(y, bool) for y in ys)
+
+      # handle datetimes
+      if x_is_time:
+        # create time axes if needed, and convert datetimes to numeric values
+        if not isinstance(plot_item.axes['bottom']['item'], DateAxisItem):
+          axis = DateAxisItem(orientation='bottom')
+          axis.attachToPlotItem(plot_item)
         xs = [timestamp(x) for x in xs]
-      if len(ys) > 0 and isinstance(ys[0], datetime):
+
+      if y_is_time:
+        if not isinstance(plot_item.axes['left']['item'], DateAxisItem):
+          axis = DateAxisItem(orientation='left')
+          axis.attachToPlotItem(plot_item)
         ys = [timestamp(y) for y in ys]
+
+      # handle categorical values
+      if not x_is_numeric:
+        axes = plot_item.axes['bottom']['item']
+        if axes._tickLevels is None:  # initialize
+          axes.setTicks([[]])
+          axes.ticks_dict = {}
+          axes.next_tick = 0
+        ticks_dict = axes.ticks_dict
+
+        xs = [str(x) for x in xs]  # ensure they're all strings
+        for x in set(xs):  # iterate unique values
+          if x not in axes.ticks_dict:  # add tick if this value is new
+            ticks_dict[x] = axes.next_tick
+            axes._tickLevels[0].append((axes.next_tick, x))
+            axes.next_tick += 1
+
+        xs = [ticks_dict[x] for x in xs]  # convert to numeric value, by look-up
+
+      if not y_is_numeric:
+        axes = plot_item.axes['left']['item']
+        if axes._tickLevels is None:  # initialize
+          axes.setTicks([[]])
+          axes.ticks_dict = {}
+          axes.next_tick = 0
+        ticks_dict = axes.ticks_dict
+
+        ys = [str(y) for y in ys]  # ensure they're all strings
+        for y in set(ys):  # iterate unique values
+          if y not in axes.ticks_dict:  # add tick if this value is new
+            ticks_dict[y] = axes.next_tick
+            axes._tickLevels[0].append((axes.next_tick, y))
+            axes.next_tick += 1
+            
+        ys = [ticks_dict[y] for y in ys]  # convert to numeric value, by look-up
 
       # allow overriding the style
       style = exp.style
@@ -191,6 +269,11 @@ class Plots():
         line = panel.plots_dict[plot['line_id']]
         line.setData(xs, ys)
         line.setPen(pen)
+
+      # for single points, plot a marker/symbol, since the line won't show up
+      if len(xs) == 1:
+        line.setSymbol('o')
+        line.setSymbolBrush(pen.color())
   
   def remove(self, exp):
     """Removes all plots associated with an experiment (inverse of Plots.add)"""
@@ -230,7 +313,7 @@ def mouse_move(event, panel):
   selected = None
   for (line_id, line) in panel.plots_dict.items():
     # only the first one gets selected
-    inside = (not selected and line.curve.mouseShape().contains(point))
+    inside = (not selected and (line.curve.mouseShape().contains(point) or line.scatter.pointsAt(point)))
 
     if inside:
       selected = line

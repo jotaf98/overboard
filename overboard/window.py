@@ -76,12 +76,23 @@ class Window(QtWidgets.QMainWindow):
 
     sidebar.addWidget(QtWidgets.QLabel('Panels'), 3, 0)
     dropdown = QtWidgets.QComboBox()
+    dropdown.addItem('Single panel')
     dropdown.addItem('One per metric')
     dropdown.addItem('One per experiment')
-    dropdown.setCurrentIndex(0)
+    dropdown.setCurrentIndex(1)
     dropdown.activated.connect(self.rebuild_plots) 
     sidebar.addWidget(dropdown, 3, 1)
     self.panel_dropdown = dropdown
+
+    sidebar.addWidget(QtWidgets.QLabel('Scalar display'), 4, 0)
+    dropdown = QtWidgets.QComboBox()
+    dropdown.addItem('Last value')
+    dropdown.addItem('Maximum')
+    dropdown.addItem('Minumum')
+    dropdown.setCurrentIndex(0)
+    dropdown.activated.connect(self.rebuild_plots) 
+    sidebar.addWidget(dropdown, 4, 1)
+    self.scalar_dropdown = dropdown
 
 
     """# smoothness slider
@@ -239,6 +250,15 @@ class Window(QtWidgets.QMainWindow):
 
     if added_columns:
       self.resize_table()
+
+    # update dropdown lists to include all hyper-parameter names
+    for arg_name in exp.meta.keys():
+      if self.x_dropdown.findText(arg_name) < 0:
+        self.x_dropdown.addItem(arg_name)
+      if self.y_dropdown.findText(arg_name) < 0:
+        self.y_dropdown.addItem(arg_name)
+      if self.panel_dropdown.findText(arg_name) < 0:
+        self.panel_dropdown.addItem(arg_name)
 
     self.process_events_if_needed()
   
