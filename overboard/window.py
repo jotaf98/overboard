@@ -13,6 +13,8 @@ from PyQt5.Qt import QPalette, QColor
 import os
 from time import time
 
+import pyqtgraph as pg
+
 from .flowlayout import FlowLayout
 from .fastslider import Slider
 from .plots import Smoother
@@ -132,8 +134,7 @@ class Window(QtWidgets.QMainWindow):
     header.setTextElideMode(Qt.ElideRight)  # show ellipsis for cut-off headers
     header.setHighlightSections(False)  # no bold header when cells are clicked
 
-    table.itemClicked.connect(self.table_click)
-    table.itemSelectionChanged.connect(self.table_select)
+    table.cellClicked.connect(self.table_click)
 
     self.table_args = {}  # maps argument names to column indices
     
@@ -144,7 +145,7 @@ class Window(QtWidgets.QMainWindow):
     self.table_args['timestamp'] = 2
 
     self.table = table
-    self.selected_exp = None
+    self.selected_exp = (None, None)
     sidebar.addWidget(table, sidebar.rowCount(), 0, 1, 2)
     
     # create the scroll area with plots
@@ -213,12 +214,16 @@ class Window(QtWidgets.QMainWindow):
     # persistent mapping between an experiment and its row (even as they're sorted)
     exp.table_row = QtCore.QPersistentModelIndex(table.model().index(row, 0))
 
-    # create icon (label with unicode symbol) with the plot color. u'\u2611 \u2610'
-    icon = self.set_table_cell(row, 0, u'\u2611', selectable=False)
-    icon.setForeground(QColor(exp.style.get('color', '#808080')))
-    # store experiment name with icon, to be retrieved later in table_click
-    icon.setData(Qt.UserRole, 'hide')
-    icon.setData(Qt.UserRole + 1, exp.name)
+    # create icon (empty label with writable pixmap)
+    size = table.rowHeight(row)
+    pixmap = QtGui.QPixmap(size, size)  # make it square
+    icon = QtGui.QLabel()
+    icon.setPixmap(pixmap)
+    icon.setFixedWidth(size)
+    icon.setProperty('experiment', exp.name)  # to retrieve later
+    
+    table.setCellWidget(row, 0, icon)
+    self.redraw_icon(icon, exp)
 
     # show experiment name
     self.set_table_cell(row, 1, exp.name)
@@ -228,6 +233,30 @@ class Window(QtWidgets.QMainWindow):
     table.sortItems(*prev_sort)
 
     self.process_events_if_needed()
+
+  def redraw_icon(self, icon, exp):
+    """Update an icon in the table by redrawing its pixmap with an experiment's style"""
+    pixmap = icon.pixmap()
+    pixmap.fill()
+    painter = QtGui.QPainter(pixmap)
+
+    # draw box around icon
+    (x, y, w, h) = pixmap.rect().getRect()
+    pen = QtGui.QPen()
+    if exp.is_selected: pen.setWidth(4)
+    else: pen.setWidth(2)
+    pen.setColor(QtGui.QColor("#EAEAF2"))
+    painter.setPen(pen)
+
+    painter.drawRoundedRect(x + 0.1 * w, y + 0.1 * h, 0.8 * w, 0.8 * h, 0.15 * w, 0.15 * h)
+
+    # draw line, if the experiment is visible
+    if exp.visible:
+      painter.setPen(pg.mkPen(exp.style))
+      painter.drawLine(x + 0.2 * w, y + 0.5 * h, x + 0.8 * w, y + 0.5 * h)
+
+    painter.end()
+
 
   def on_exp_meta_ready(self, exp):
     """Called by Experiment when the meta-data has been read"""
@@ -315,63 +344,52 @@ class Window(QtWidgets.QMainWindow):
       text_width = metrics.boundingRect(text).width()
       header.resizeSection(col, min(max_width, max(table.sizeHintForColumn(col), text_width + 20)))  # needs some extra width
 
-  def table_click(self, item):
-    # check if there's an action associated with this cell
-    action = item.data(Qt.UserRole)
-    if action:
-      name = item.data(Qt.UserRole + 1)
-      exp = self.experiments.exps[name]
-      if action == 'hide':
-        # toggle visibility of a given experiment, if the icon is clicked
-        if exp.visible:
-          # remove all associated plots
-          self.plots.remove(exp)
+  def table_click(self, row, col):
+    (exp, icon) = self.row_to_experiment(row, return_icon=True)
 
-          # reset icon and style, allowing it to be used by other experiments
-          item.setForeground(QColor(128, 128, 128))
-          item.setText(u'\u2610')
-          self.plots.drop_style(exp.style_order, exp.style)
-          exp.style = {}
-        else:
-          # assign new style
-          (exp.style_order, exp.style) = self.plots.get_style()
-          
-          item.setForeground(QColor(exp.style.get('color', "#808080")))
-          item.setText(u'\u2611')
+    # toggle visibility of a given experiment, if the icon (column 0) is clicked
+    if col == 0:
+      if exp.visible:
+        # remove all associated plots
+        exp.visible = False
+        self.plots.remove(exp)
 
-          # create plots
-          self.plots.add(exp)
+        # reset icon and style, allowing it to be used by other experiments
+        self.redraw_icon(icon, exp)
+        self.plots.drop_style(exp.style_order, exp.style)
+        exp.style = {}
+      else:
+        # assign new style
+        exp.visible = True
+        (exp.style_order, exp.style) = self.plots.get_style()
+        self.redraw_icon(icon, exp)
 
-        exp.visible = not exp.visible
-
-  def table_select(self):
-    # selection changed
-    items = self.table.selectedItems()
-    if items:  # get associated experiment
-      exp = self.row_to_experiment(items[0].row())
+        # create plots
+        self.plots.add(exp)
     else:
-      exp = None
+      # unselect previous experiment first
+      (old_exp, old_icon) = self.selected_exp
+      if old_exp and old_exp != exp:
+        old_exp.is_selected = False
+        self.redraw_icon(old_icon, old_exp)
+        if old_exp.visible:  # update its view
+          self.plots.add(old_exp)
 
-    # unselect previous experiment first
-    if self.selected_exp and self.selected_exp != exp:
-      self.selected_exp.is_selected = False
-      if self.selected_exp.visible:  # update its view
-        self.plots.add(self.selected_exp)
+      if exp:  # select new one
+        exp.is_selected = True
+        self.plots.add(exp)
+        self.selected_exp = (exp, icon)
+        self.visualizations.select(exp)
+      else:
+        self.selected_exp = (None, None)
+        self.visualizations.select(None)
 
-    if items:  # select new one
-      exp.is_selected = True
-      self.plots.add(exp)
-      self.selected_exp = exp
-      self.visualizations.select(exp)
-    else:
-      self.selected_exp = None
-      self.visualizations.select(None)
-
-  def row_to_experiment(self, row):
+  def row_to_experiment(self, row, return_icon=False):
     # check left-most cell of the given row to get the associated experiment name
-    leftmost = self.table.item(row, 0)
-    name = leftmost.data(Qt.UserRole + 1)
-    return self.experiments.exps[name]
+    icon = self.table.cellWidget(row, 0)
+    exp = self.experiments.exps[icon.property('experiment')]
+    if return_icon: return (exp, icon)
+    return exp
   
   def size_slider_changed(self):
     # resize plots and visualizations
