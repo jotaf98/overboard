@@ -34,25 +34,56 @@ class Window(QtWidgets.QMainWindow):
     main = QtWidgets.QSplitter(self)
 
     # create sidebar
-    sidebar = QtWidgets.QVBoxLayout()
+    sidebar = QtWidgets.QGridLayout()
     sidebar.setAlignment(Qt.AlignTop)
     widget = QtWidgets.QWidget(main)  # need dummy widget to wrap box layout
     widget.setLayout(sidebar)
 
-    # plot size slider
+    # panel size slider
     plotsize = args.plotsize
     if plotsize == 0:
       plotsize = screen_size.width() * 0.2
-    sidebar.addWidget(QtWidgets.QLabel('Plot size'))
-    slider = Slider(Qt.Horizontal)  #QtWidgets.QSlider(Qt.Horizontal)
+    sidebar.addWidget(QtWidgets.QLabel('Panel size'), 0, 0)
+    slider = Slider(Qt.Horizontal)  # replaces QtWidgets.QSlider(Qt.Horizontal)
     slider.setMinimum(screen_size.width() * 0.05)
     slider.setMaximum(screen_size.width() * 0.8)
     slider.setTickInterval(screen_size.width() * 0.005)
     slider.setValue(plotsize)  # initial value
     slider.valueChanged.connect(self.size_slider_changed)
-    sidebar.addWidget(slider)
+    sidebar.addWidget(slider, 0, 1)
     self.size_slider = slider
     
+    # dropdown lists for plot configuration
+    sidebar.addWidget(QtWidgets.QLabel('X axis'), 1, 0)
+    dropdown = QtWidgets.QComboBox()
+    dropdown.addItem('First metric')
+    dropdown.addItem('Panel metric')
+    dropdown.addItem('All metrics')
+    dropdown.setCurrentIndex(0)
+    dropdown.activated.connect(self.rebuild_plots) 
+    sidebar.addWidget(dropdown, 1, 1)
+    self.x_dropdown = dropdown
+
+    sidebar.addWidget(QtWidgets.QLabel('Y axis'), 2, 0)
+    dropdown = QtWidgets.QComboBox()
+    dropdown.addItem('First metric')
+    dropdown.addItem('Panel metric')
+    dropdown.addItem('All metrics')
+    dropdown.setCurrentIndex(1)
+    dropdown.activated.connect(self.rebuild_plots) 
+    sidebar.addWidget(dropdown, 2, 1)
+    self.y_dropdown = dropdown
+
+    sidebar.addWidget(QtWidgets.QLabel('Panels'), 3, 0)
+    dropdown = QtWidgets.QComboBox()
+    dropdown.addItem('One per metric')
+    dropdown.addItem('One per experiment')
+    dropdown.setCurrentIndex(0)
+    dropdown.activated.connect(self.rebuild_plots) 
+    sidebar.addWidget(dropdown, 3, 1)
+    self.panel_dropdown = dropdown
+
+
     """# smoothness slider
     sidebar.addWidget(QtWidgets.QLabel('Smoothness'))
     slider = Slider(Qt.Horizontal)  #QtWidgets.QSlider(Qt.Horizontal)
@@ -103,7 +134,7 @@ class Window(QtWidgets.QMainWindow):
 
     self.table = table
     self.selected_exp = None
-    sidebar.addWidget(table)
+    sidebar.addWidget(table, sidebar.rowCount(), 0, 1, 2)
     
     # create the scroll area with plots
     (plot_scroll_widget, plot_scroll_area) = create_scroller()
@@ -192,6 +223,7 @@ class Window(QtWidgets.QMainWindow):
     # print a row of meta-data (argument) values for this experiment in the table
     (table, table_args) = (self.table, self.table_args)
     added_columns = False
+
     for arg_name in exp.meta.keys():
       if not arg_name.startswith('_'):
         if arg_name not in table_args:  # a new argument name, add a column
@@ -210,6 +242,20 @@ class Window(QtWidgets.QMainWindow):
 
     self.process_events_if_needed()
   
+  def on_exp_header_ready(self, exp):
+    """Called by Experiment when the header data (metrics/column names) has been read"""
+    # update dropdown lists to include all metric names
+    for name in exp.names:
+      if self.x_dropdown.findText(name) < 0:
+        self.x_dropdown.addItem(name)
+      if self.y_dropdown.findText(name) < 0:
+        self.y_dropdown.addItem(name)
+
+  def rebuild_plots(self):
+    """Rebuild all plots (e.g. when plot options such as x/y axis change)"""
+    self.plots.remove_all()
+    for exp in self.experiments.exps.values():
+      self.plots.add(exp)
 
   def set_table_cell(self, row, col, value, selectable=True):
     # helper to set a single table cell in the sidebar.

@@ -136,6 +136,7 @@ class Experiment():
   def on_header_ready(self, header):  
     self.names = header
     self.data = [[] for _ in header]  # initialize each column of data
+    self.window.on_exp_header_ready(self)
 
   def on_data_ready(self, data):  
     assert(len(self.names) > 0)  # sanity check, on_header_ready should have been called before

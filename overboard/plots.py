@@ -55,18 +55,64 @@ class Plots():
     # return a style to the set of available ones
     heapq.heappush(self.unused_styles, (style_order, style))
 
-  def get_plot_info(self, exp):
-    x_name = exp.names[0]
-    return [{
-      'panel': (x_name, y_name),
-      'line': exp.name,
-      'x': x_name,
-      'y': y_name,
-      'width': 4 if exp.is_selected else 2
-    } for y_name in exp.names[1:]]
+  def define_plots(self, exp):
+    """Defines plot information for a given experiment. Returns a list of dicts,
+    each dict defining the properties of a single line (sources for x, y, color,
+    panel, etc). This accesses the window widgets to check the current options."""
+
+    x_option = self.window.x_dropdown.currentText()
+    y_option = self.window.y_dropdown.currentText()
+    panel_option = self.window.panel_dropdown.currentText()
+
+    # some combinations are invalid, change to sensible defaults in those cases
+    if panel_option == "One per experiment":
+      if x_option == "Panel metric":
+        x_option = "First metric"
+        self.window.x_dropdown.setCurrentText(x_option)
+      if y_option == "Panel metric":
+        y_option = "All metrics"
+        self.window.y_dropdown.setCurrentText(y_option)
+    if x_option == "All metrics" and y_option == "All metrics":
+      x_option = "First metric"
+      self.window.x_dropdown.setCurrentText(x_option)
+
+    # get first metric for X or Y if requested
+    x_name = (exp.names[0] if x_option == "First metric" else x_option)
+    y_name = (exp.names[0] if y_option == "First metric" else y_option)
+
+    # create list of panels, by metric or by experiment
+    if panel_option == "One per metric":
+      panels = [(x_name, name) for name in exp.names]
+      if x_option != "Panel metric" and y_option != "Panel metric":
+        # panel metric is unused, so all panels would look the same; keep only one
+        panels = [(x_name, y_name)]
+    elif panel_option == "One per experiment":
+      panels = [(None, exp.name)]  # add() expects a tuple, using 2nd element for plot title
+
+    info = []  # the list of lines to plot
+    for panel in panels:  # possibly spread plots across panels
+      lines = [(x_name, y_name)]  # single line per panel, with these X and Y sources
+      if x_option == "All metrics":  # several lines in a panel - one per metric
+        lines = [(name, y_name) for name in exp.names]
+      elif y_option == "All metrics":
+        lines = [(x_name, name) for name in exp.names]
+
+      for (x, y) in lines:  # possibly create multiple lines for this panel
+        if x_option == "Panel metric": x = panel[1]  # different metrics per panel
+        if y_option == "Panel metric": y = panel[1]
+
+        # a plot with the same values on X and Y is redundant, so skip it
+        if x == y: continue
+
+        # final touches and compose dict
+        width = 4 if exp.is_selected else 2
+        style = exp.name
+        info.append(dict(panel=panel, x=x, y=y, style=style, width=width, line_id=(x, y, exp.name)))
+    return info
 
   def add(self, exp):
-    plots = self.get_plot_info(exp)
+    """Creates or updates plots associated with given experiment, creating panels if needed"""
+    plots = self.define_plots(exp)
     plotsize = None
     for plot in plots:
       # get data points
@@ -74,9 +120,8 @@ class Plots():
 
       # check if panel exists. there's a different panel for each x coordinate (e.g. iterations, time)
       if plot['panel'] not in self.panels:
-        # create new panel to contain plot.
-        # if title not defined, use the panel ID (e.g. stat name)
-        title = str(plot.get('title', plot['panel'][1]))
+        # create new panel to contain plot
+        title = plot['panel'][1]
         plot_widget = create_plot_widget(title)
         panel = self.window.add_panel(plot_widget, title)
 
@@ -133,29 +178,30 @@ class Plots():
         pen = pg.mkPen(exp.style)
       
       # check if plot line already exists
-      if plot['line'] not in panel.plots_dict:
+      if plot['line_id'] not in panel.plots_dict:
         # create new line
         line = panel.plot_widget.getPlotItem().plot(xs, ys, pen=pen)
         
         line.curve.setClickable(True, 8)  # size of hover region
         line.mouse_over = False
         
-        panel.plots_dict[plot['line']] = line
+        panel.plots_dict[plot['line_id']] = line
       else:
         # update existing one
-        line = panel.plots_dict[plot['line']]
+        line = panel.plots_dict[plot['line_id']]
         line.setData(xs, ys)
         line.setPen(pen)
   
   def remove(self, exp):
-    plots = self.get_plot_info(exp)
+    """Removes all plots associated with an experiment (inverse of Plots.add)"""
+    plots = self.define_plots(exp)
     for plot in plots:
       # find panel
       if plot['panel'] in self.panels:
         panel = self.panels[plot['panel']]
 
         # find plot line
-        line_id = plot['line']
+        line_id = plot['line_id']
         if line_id in panel.plots_dict:
           # remove it
           plot_item = panel.plot_widget.getPlotItem()
@@ -168,6 +214,13 @@ class Plots():
           panel.deleteLater()
           del self.panels[plot['panel']]
 
+  def remove_all(self):
+    """Remove all plots"""
+    for panel in self.panels.values():
+      panel.setParent(None)
+      panel.deleteLater()
+    self.panels.clear()
+
 
 def mouse_move(event, panel):
   # select curves when hovering them, and update mouse cursor
@@ -175,12 +228,13 @@ def mouse_move(event, panel):
   point = viewbox.mapSceneToView(event.pos())
   
   selected = None
-  for line in panel.plots_dict.values():
+  for (line_id, line) in panel.plots_dict.items():
     # only the first one gets selected
     inside = (not selected and line.curve.mouseShape().contains(point))
 
     if inside:
       selected = line
+      selected_id = line_id
       if not line.mouse_over:
         # change line style to thicker
         line.original_pen = line.opts['pen']
@@ -209,15 +263,15 @@ def mouse_move(event, panel):
     index = np.argmin(np.abs(data[0] - x))
     (x, y) = (data[0][index], data[1][index])
 
-    # show data coordinates
-    names = [name for (name, line) in panel.plots_dict.items() if line is selected]  # ideally should return only 1
-    names = ' '.join(names)
     # this trick prints floats with 3 significant digits and no sci notation (e.g. 1e-4). also consider integers.
     if x % 1 == 0: x = str(int(x))
     else: x = float('%.3g' % x)
     if y % 1 == 0: y = str(int(y))
     else: y = float('%.3g' % y)
-    text = "%s<br/>(%s, %s)" % (names, x, y)
+    
+    # show data coordinates and line info
+    (x_name, y_name, exp_name) = selected_id
+    text = f"{exp_name}<br/>({x_name}={x}, {y_name}={y})"
   else:
     text = ""
 
