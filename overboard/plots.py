@@ -118,7 +118,7 @@ class Plots():
         if x == y: continue
 
         # final touches and compose dict
-        width = 4 if exp.is_selected else 2
+        width = 2
         style = exp.name
         info.append(dict(panel=panel, x=x, y=y, style=style, width=width, line_id=(x, y, exp.name)))
     return info
@@ -242,7 +242,7 @@ class Plots():
         ys = [ticks_dict[y] for y in ys]  # convert to numeric value, by look-up
 
       # allow overriding the style
-      style = exp.style
+      style = dict(exp.style)  # explicit copy since we'll change it
       if 'color' in plot:
         style['color'] = plot['color']
       if 'width' in plot:
@@ -250,6 +250,9 @@ class Plots():
       if 'dash' in plot and plot['dash'] in dashes_by_name:
         style['style'] = dashes_by_name[plot['dash']]
       
+      if exp.is_selected:  # selected lines are thicker
+        style['width'] += 2
+
       try:
         pen = pg.mkPen(style)
       except:  # if the style is malformed, use the default style
