@@ -14,6 +14,24 @@ QWidget {
 }*/
 
 
+/* set correct background color for dropdown lists, and remove indicator icon */
+
+QComboBox::item:alternate {
+	background: white;  /* needed to hide indicator */
+}
+QComboBox::item:selected {
+	color: white;
+	background-color: #4C72B0;
+	border: 0px;  /* needed to hide indicator */
+}
+QComboBox::indicator {  /* hide indicator */
+	background-color: transparent;
+	selection-background-color: transparent;
+	color: transparent;
+	selection-color: transparent;
+}
+
+
 /* for the sliders */
 
 QSlider::groove:horizontal { 
@@ -90,9 +108,5 @@ QTableWidget {
   background-color: white;
 
 	selection-color: white;
-	selection-background-color: #4C72B0;
-}
-
-QTableView::item:selected:!active {  /* note: doesn't seem to work */
 	selection-background-color: #4C72B0;
 }
