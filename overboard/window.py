@@ -120,7 +120,7 @@ class Window(QtWidgets.QMainWindow):
 
     #table.setFocusPolicy(Qt.NoFocus)
     table.setSelectionBehavior(QtWidgets.QTableView.SelectRows)  # allow selecting rows
-    table.setSelectionMode(QtWidgets.QTableView.ExtendedSelection)
+    table.setSelectionMode(QtWidgets.QTableView.SingleSelection)
     table.setAutoScroll(False)  # don't scroll when user clicks table cells
 
     table.setHorizontalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)  # smooth scrolling
@@ -136,6 +136,7 @@ class Window(QtWidgets.QMainWindow):
     header.setHighlightSections(False)  # no bold header when cells are clicked
 
     table.itemSelectionChanged.connect(self.on_table_select)
+    table.mousePressEvent = self.on_table_click
 
     self.table_args = {}  # maps argument names to column indices
     
@@ -383,6 +384,11 @@ class Window(QtWidgets.QMainWindow):
     if len(selected) > 0:  # select new one
       exp = self.experiments.exps[selected[0].data(Qt.UserRole)]
     self.select_experiment(exp, clicked_table=True)
+
+  def on_table_click(self, event):
+    """Clear selection on click (before selecting a row), to allow de-selecting by clicking outside table items"""
+    self.table.clearSelection()
+    QtGui.QTableWidget.mousePressEvent(self.table, event)
 
   def select_experiment(self, exp=None, clicked_table=False):
     """Select an experiment in the table, highlighting it in the plots.
