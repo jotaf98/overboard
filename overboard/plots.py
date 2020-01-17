@@ -144,7 +144,7 @@ class Plots():
         plot_item.addItem(panel.cursor_vline, ignoreBounds=True)  # ensure it doesn't mess autorange
 
         # mouse cursor (dot)
-        panel.cursor_dot = pg.PlotDataItem([0], [0], pen=None, symbolPen=None, symbolBrush="#C00000", symbol='o', symbolSize=7)
+        panel.cursor_dot = pg.PlotDataItem([], [], pen=None, symbolPen=None, symbolBrush="#C00000", symbol='o', symbolSize=7)
         panel.cursor_dot.setVisible(False)
         panel.cursor_dot.setZValue(10)
         plot_item.addItem(panel.cursor_dot, ignoreBounds=True)
