@@ -126,6 +126,8 @@ class Plots():
 
   def add(self, exp):
     """Creates or updates plots associated with given experiment, creating panels if needed"""
+    if len(exp.names) == 0:  # no data yet
+      return
     plots = self.define_plots(exp)
     for plot in plots:
       # check if panel exists
@@ -286,6 +288,8 @@ class Plots():
   
   def remove(self, exp):
     """Removes all plots associated with an experiment (inverse of Plots.add)"""
+    if len(exp.names) == 0:  # no data yet
+      return
     plots = self.define_plots(exp)
     for plot in plots:
       # find panel

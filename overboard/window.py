@@ -52,7 +52,7 @@ class Window(QtWidgets.QMainWindow):
     slider.setMaximum(screen_size.width() * 0.8)
     slider.setTickInterval(screen_size.width() * 0.005)
     slider.setValue(panel_size)  # initial value
-    slider.valueChanged.connect(self.size_slider_changed)
+    slider.valueChanged.connect(self.on_size_slider_changed)
     sidebar.addWidget(slider, 0, 1)
     self.size_slider = slider
     
@@ -96,6 +96,21 @@ class Window(QtWidgets.QMainWindow):
     dropdown.activated.connect(self.rebuild_plots) 
     sidebar.addWidget(dropdown, 4, 1)
     self.scalar_dropdown = dropdown
+
+    # experiments filter text box
+    sidebar.addWidget(QtWidgets.QLabel('Filter'), 5, 0)
+
+    edit = QtWidgets.QLineEdit(self.settings.value('filter_edit', ''))
+    edit.setPlaceholderText('Write filter and press <enter>')
+    edit.returnPressed.connect(self.on_filter_ready)
+    sidebar.addWidget(edit, 5, 1)
+    self.filter_edit = edit
+
+    # auto-complete (TODO)
+    #initial_suggestions = ['A', 'B']
+    #completer = QtWidgets.QCompleter(self.settings.value('filter_completer', initial_suggestions))
+    #edit.setCompleter(completer)
+
 
     """# smoothness slider
     sidebar.addWidget(QtWidgets.QLabel('Smoothness'))
@@ -300,6 +315,9 @@ class Window(QtWidgets.QMainWindow):
         self.panel_dropdown.addItem(arg_name)
 
     self.process_events_if_needed()
+
+    # hide row if filter says so. TODO: could be more efficient, this iterates all experiments
+    self.on_filter_ready()
   
   def on_exp_header_ready(self, exp):
     """Called by Experiment when the header data (metrics/column names) has been read"""
@@ -423,9 +441,47 @@ class Window(QtWidgets.QMainWindow):
       if not clicked_table:  # update table selection
         self.table.clearSelection()
 
+  def on_filter_ready(self):
+    """User pressed Enter in filter text box, filter the experiments"""
+    if len(self.filter_edit.text().strip()) == 0:
+      # no filter, show all experiments
+      for exp in self.experiments.exps.values():
+        if exp.is_filtered:
+          self.table.setRowHidden(exp.table_row.row(), False)
+          if exp.visible:
+            self.plots.add(exp)
+          exp.is_filtered = False
+      self.filter_edit.setStyleSheet("color: black;")
 
-  def size_slider_changed(self):
-    # resize plots and visualizations
+    else:
+      # compile filter code
+      try:
+        func = compile(self.filter_edit.text(), '<filter>', 'eval')
+        self.filter_edit.setStyleSheet("color: black;")
+      except:  # error
+        self.filter_edit.setStyleSheet("color: #B00000;")
+        return
+
+      for exp in self.experiments.exps.values():
+        # evaluate filter to obtain boolean
+        try:
+          hide = not eval(func, exp.meta, exp.meta)
+        except:  # error
+          self.filter_edit.setStyleSheet("color: #B00000;")
+          continue
+
+        # hide or show depending on context
+        self.table.setRowHidden(exp.table_row.row(), hide)
+        if hide:
+          if not exp.is_filtered:
+            self.plots.remove(exp)
+        else:
+          if exp.is_filtered and exp.visible:
+            self.plots.add(exp)
+        exp.is_filtered = hide
+
+  def on_size_slider_changed(self):
+    """Resize panels for plots and visualizations"""
     panel_size = self.size_slider.value()
     for panel in self.plots.panels.values():
       panel.setFixedWidth(panel_size)
@@ -444,6 +500,12 @@ class Window(QtWidgets.QMainWindow):
     self.settings.setValue('x_dropdown', self.x_dropdown.currentText())
     self.settings.setValue('y_dropdown', self.y_dropdown.currentText())
     self.settings.setValue('panel_dropdown', self.panel_dropdown.currentText())
+    self.settings.setValue('scalar_dropdown', self.scalar_dropdown.currentText())
+    self.settings.setValue('filter_edit', self.filter_edit.text())
+
+    #m = self.filter_edit.completer().model()
+    #suggestions = [m.data(m.index(i), 0) for i in range(m.rowCount())]
+    #self.settings.setValue('filter_completer', suggestions)
 
     event.accept()
 

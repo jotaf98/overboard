@@ -101,6 +101,7 @@ class Experiment():
 
     self.visible = True
     self.is_selected = False
+    self.is_filtered = False
 
     # assign a plot style to this experiment
     (self.style_order, self.style) = window.plots.get_style()
@@ -146,7 +147,7 @@ class Experiment():
       column.extend(new_values)
 
     # update plots
-    if self.visible:
+    if self.visible and not self.is_filtered:
       self.window.plots.add(self)
 
   def on_done(self):
