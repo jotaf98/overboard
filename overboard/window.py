@@ -29,6 +29,9 @@ class Window(QtWidgets.QMainWindow):
     self.visualizations = None  # object that manages custom visualizations
     self.last_process_events = time()  # to update during heavy loads
 
+    # persistent settings
+    self.settings = QtCore.QSettings('OverBoard', 'OverBoard')
+
     # get screen size
     screen_size = QtWidgets.QDesktopWidget().availableGeometry(self).size()
 
@@ -42,15 +45,13 @@ class Window(QtWidgets.QMainWindow):
     widget.setLayout(sidebar)
 
     # panel size slider
-    plotsize = args.plotsize
-    if plotsize == 0:
-      plotsize = screen_size.width() * 0.2
+    panel_size = float(self.settings.value('panel_size', screen_size.width() * 0.2))
     sidebar.addWidget(QtWidgets.QLabel('Panel size'), 0, 0)
     slider = Slider(Qt.Horizontal)  # replaces QtWidgets.QSlider(Qt.Horizontal)
     slider.setMinimum(screen_size.width() * 0.05)
     slider.setMaximum(screen_size.width() * 0.8)
     slider.setTickInterval(screen_size.width() * 0.005)
-    slider.setValue(plotsize)  # initial value
+    slider.setValue(panel_size)  # initial value
     slider.valueChanged.connect(self.size_slider_changed)
     sidebar.addWidget(slider, 0, 1)
     self.size_slider = slider
@@ -61,7 +62,7 @@ class Window(QtWidgets.QMainWindow):
     dropdown.addItem('First metric')
     dropdown.addItem('Panel metric')
     dropdown.addItem('All metrics')
-    dropdown.setCurrentIndex(0)
+    dropdown.setCurrentText(self.settings.value('x_dropdown', 'First metric'))
     dropdown.activated.connect(self.rebuild_plots) 
     sidebar.addWidget(dropdown, 1, 1)
     self.x_dropdown = dropdown
@@ -71,7 +72,7 @@ class Window(QtWidgets.QMainWindow):
     dropdown.addItem('First metric')
     dropdown.addItem('Panel metric')
     dropdown.addItem('All metrics')
-    dropdown.setCurrentIndex(1)
+    dropdown.setCurrentText(self.settings.value('y_dropdown', 'Panel metric'))
     dropdown.activated.connect(self.rebuild_plots) 
     sidebar.addWidget(dropdown, 2, 1)
     self.y_dropdown = dropdown
@@ -81,7 +82,7 @@ class Window(QtWidgets.QMainWindow):
     dropdown.addItem('Single panel')
     dropdown.addItem('One per metric')
     dropdown.addItem('One per experiment')
-    dropdown.setCurrentIndex(1)
+    dropdown.setCurrentText(self.settings.value('panel_dropdown', 'One per metric'))
     dropdown.activated.connect(self.rebuild_plots) 
     sidebar.addWidget(dropdown, 3, 1)
     self.panel_dropdown = dropdown
@@ -91,11 +92,10 @@ class Window(QtWidgets.QMainWindow):
     dropdown.addItem('Last value')
     dropdown.addItem('Maximum')
     dropdown.addItem('Minumum')
-    dropdown.setCurrentIndex(0)
+    dropdown.setCurrentText(self.settings.value('scalar_dropdown', 'Last value'))
     dropdown.activated.connect(self.rebuild_plots) 
     sidebar.addWidget(dropdown, 4, 1)
     self.scalar_dropdown = dropdown
-
 
     """# smoothness slider
     sidebar.addWidget(QtWidgets.QLabel('Smoothness'))
@@ -188,9 +188,9 @@ class Window(QtWidgets.QMainWindow):
       panel.setTitle(title)
     
     # set the size
-    plotsize = self.size_slider.value()
-    panel.setFixedWidth(plotsize)
-    panel.setFixedHeight(plotsize)
+    panel_size = self.size_slider.value()
+    panel.setFixedWidth(panel_size)
+    panel.setFixedHeight(panel_size)
 
     if add_to_layout:  # add to window's flow layout
       self.flow_layout.addWidget(panel)
@@ -420,18 +420,26 @@ class Window(QtWidgets.QMainWindow):
 
   def size_slider_changed(self):
     # resize plots and visualizations
-    plotsize = self.size_slider.value()
+    panel_size = self.size_slider.value()
     for panel in self.plots.panels.values():
-      panel.setFixedWidth(plotsize)
-      panel.setFixedHeight(plotsize)
+      panel.setFixedWidth(panel_size)
+      panel.setFixedHeight(panel_size)
     for panel_group in self.visualizations.panels.values():
       for panel in panel_group:
-        panel.setFixedWidth(plotsize)
-        panel.setFixedHeight(plotsize)
+        panel.setFixedWidth(panel_size)
+        panel.setFixedHeight(panel_size)
   
   #def smooth_slider_changed(self):
   #  self.smoother = Smoother(self.smooth_slider.value() / 4.0)
 
+  def closeEvent(self, event):
+    """Write state to settings before closing"""
+    self.settings.setValue('panel_size', self.size_slider.value())
+    self.settings.setValue('x_dropdown', self.x_dropdown.currentText())
+    self.settings.setValue('y_dropdown', self.y_dropdown.currentText())
+    self.settings.setValue('panel_dropdown', self.panel_dropdown.currentText())
+
+    event.accept()
 
 def create_scroller():
   scroll_area = QtWidgets.QScrollArea()
