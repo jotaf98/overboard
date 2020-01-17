@@ -92,7 +92,6 @@ QHeaderView::section {
 
 QHeaderView::item:selected {
 	font-weight: none;
-	background: red;
 }
 
 QTableView {

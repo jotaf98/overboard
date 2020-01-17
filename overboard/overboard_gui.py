@@ -52,15 +52,12 @@ def main():
 
   window.experiments = experiments
 
-  # create timer for updating the current visualizations
+  # create timer for updating the current visualizations (TODO: multi-threading)
   vis_timer = QtCore.QTimer()
   vis_timer.timeout.connect(visualizations.update)
   vis_timer.start(args.refresh_vis)
 
   window.show()
-
-  #if window.table.rowCount() > 0:  # select first row if any (after sorting)
-  #  window.table.selectRow(0)
   
   app.exec_()
   #sys.exit(app.exec_())
