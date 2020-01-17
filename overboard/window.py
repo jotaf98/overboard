@@ -507,6 +507,7 @@ class Window(QtWidgets.QMainWindow):
     #suggestions = [m.data(m.index(i), 0) for i in range(m.rowCount())]
     #self.settings.setValue('filter_completer', suggestions)
 
+    self.settings.sync()
     event.accept()
 
 def create_scroller():

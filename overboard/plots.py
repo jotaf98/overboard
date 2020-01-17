@@ -360,6 +360,10 @@ class Plots():
       index = np.argmin(np.abs(data[0] - x))
       (x, y) = (data[0][index], data[1][index])
 
+      # snap dot to nearest point too
+      panel.cursor_dot.setVisible(True)
+      panel.cursor_dot.setData([x], [y])
+
       # this trick prints floats with 3 significant digits and no sci notation (e.g. 1e-4). also consider integers.
       if x % 1 == 0: x = str(int(x))
       else: x = float('%.3g' % x)
@@ -369,9 +373,6 @@ class Plots():
       # show data coordinates and line info
       (x_name, y_name, exp_name) = hovered_id
       text = f"{exp_name}<br/>({x_name}={x}, {y_name}={y})"
-
-      panel.cursor_dot.setVisible(True)
-      panel.cursor_dot.setData([x], [y])
 
     else:
       panel.cursor_dot.setVisible(False)
