@@ -23,13 +23,12 @@ def main():
   # parse command line options
   parser = argparse.ArgumentParser()
   parser.add_argument("folder", help="Root folder where experiments are found.")
-  parser.add_argument("-plotsize", default=0, type=float, help="Initial size of plots, in pixels.")
   #parser.add_argument("-smoothen", default=0, type=float)
   parser.add_argument("-mpl-dpi", default=100, type=int, help="DPI setting for MatPlotLib plots, may be used if text is too big/small (useful for high-DPI monitors).")
   parser.add_argument("--force-reopen-files", action='store_true', default=False, help="Slower but more reliable refresh method, useful for remote files.")
   parser.add_argument("-refresh-plots", default=3, type=int, help="Refresh interval for plot updates, in seconds.")
   parser.add_argument("-refresh-new", default=11, type=int, help="Refresh interval for finding new experiments, in seconds.")
-  parser.add_argument("-refresh-vis", default=2999, type=int, help="Refresh interval for visualizations, in miliseconds.")
+  parser.add_argument("-refresh-vis", default=3, type=int, help="Refresh interval for visualizations, in seconds.")
   parser.add_argument("--no-vis-snapshot", action='store_true', default=False, help="Visualizations are draw using a snapshot of the visualization function, saved with each experiment. This ensures visualizations from old experiments are maintained. Passing this option disables this behavior, which may be useful for debugging.")
   parser.add_argument("--debug", action='store_true', default=False, help="Does not suppress exceptions during operation, useful for debugging.")
   args = parser.parse_args()
@@ -55,7 +54,7 @@ def main():
   # create timer for updating the current visualizations (TODO: multi-threading)
   vis_timer = QtCore.QTimer()
   vis_timer.timeout.connect(visualizations.update)
-  vis_timer.start(args.refresh_vis)
+  vis_timer.start(args.refresh_vis * 1000)
 
   window.show()
   
