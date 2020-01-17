@@ -135,7 +135,7 @@ class Window(QtWidgets.QMainWindow):
     header.setTextElideMode(Qt.ElideRight)  # show ellipsis for cut-off headers
     header.setHighlightSections(False)  # no bold header when cells are clicked
 
-    table.itemSelectionChanged.connect(self.table_select)
+    table.itemSelectionChanged.connect(self.on_table_select)
 
     self.table_args = {}  # maps argument names to column indices
     
@@ -221,7 +221,7 @@ class Window(QtWidgets.QMainWindow):
     icon = QtGui.QLabel()
     icon.setPixmap(pixmap)
     icon.setFixedWidth(size)
-    icon.mousePressEvent = lambda _: self.icon_click(icon, exp)
+    icon.mousePressEvent = lambda _: self.on_icon_click(icon, exp)
 
     table.setCellWidget(row, 0, icon)
     self.redraw_icon(icon, exp)
@@ -314,6 +314,7 @@ class Window(QtWidgets.QMainWindow):
     self.plots.remove_all()
     for exp in self.experiments.exps.values():
       self.plots.add(exp)
+      self.process_events_if_needed()  # keep it responsive
 
   def set_table_cell(self, row, col, value, exp, selectable=True):
     # helper to set a single table cell in the sidebar.
@@ -355,7 +356,7 @@ class Window(QtWidgets.QMainWindow):
       text_width = metrics.boundingRect(text).width()
       header.resizeSection(col, min(max_width, max(table.sizeHintForColumn(col), text_width + 20)))  # needs some extra width
 
-  def icon_click(self, icon, exp):
+  def on_icon_click(self, icon, exp):
     """Toggle visibility of a given experiment, when the
     icon (first column of table) is clicked"""
     if exp.visible:
@@ -375,7 +376,21 @@ class Window(QtWidgets.QMainWindow):
     # update icon
     self.redraw_icon(icon, exp)
 
-  def table_select(self):
+  def on_table_select(self):
+    """Select experiment on table row click"""
+    exp = None
+    selected = self.table.selectedItems()
+    if len(selected) > 0:  # select new one
+      exp = self.experiments.exps[selected[0].data(Qt.UserRole)]
+    self.select_experiment(exp, clicked_table=True)
+
+  def select_experiment(self, exp=None, clicked_table=False):
+    """Select an experiment in the table, highlighting it in the plots.
+    Passing None deselects previous one."""
+
+    if isinstance(exp, str):  # experiment name, look it up
+      exp = self.experiments.exps[exp]
+
     # unselect previous experiment first
     (old_exp, old_icon) = self.selected_exp
     if old_exp:
@@ -384,21 +399,24 @@ class Window(QtWidgets.QMainWindow):
       if old_exp.visible:  # update its view
         self.plots.add(old_exp)
 
-    selected = self.table.selectedItems()
+    if exp:
+      if exp.visible:  # don't select if invisible
+        icon = self.table.cellWidget(exp.table_row.row(), 0)
 
-    if len(selected) > 0:  # select new one
-      item = selected[0]
-      exp = self.experiments.exps[item.data(Qt.UserRole)]
-      icon = self.table.cellWidget(item.row(), 0)
+        exp.is_selected = True
+        self.plots.add(exp)
+        self.selected_exp = (exp, icon)
+        self.visualizations.select(exp)
+        self.redraw_icon(icon, exp)
 
-      exp.is_selected = True
-      self.plots.add(exp)
-      self.selected_exp = (exp, icon)
-      self.visualizations.select(exp)
-      self.redraw_icon(icon, exp)
+        if not clicked_table:  # update table selection
+          self.table.selectRow(exp.table_row.row())
     else:
       self.selected_exp = (None, None)
       self.visualizations.select(None)
+      if not clicked_table:  # update table selection
+        self.table.clearSelection()
+
 
   def size_slider_changed(self):
     # resize plots and visualizations

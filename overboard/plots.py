@@ -32,6 +32,7 @@ class Plots():
     window.plots = self  # back-reference
 
     self.panels = {}  # widgets containing plots, indexed by name (usually the plot title at the top)
+    self.hovered_line_id = None
     self.unused_styles = []  # reuse styles from hidden experiments. this is a heap so early styles have priority.
     self.next_style_index = 0
 
@@ -134,30 +135,37 @@ class Plots():
         plot_widget = create_plot_widget(title)
         panel = self.window.add_panel(plot_widget, title)
 
-        panel.plots_dict = {}
-        
-        # set up mouse move event
-        plot_widget.mouseMoveEvent = partial(mouse_move, panel=panel)
-        plot_widget.leaveEvent = partial(mouse_leave, panel=panel)
+        plot_item = panel.plot_widget.getPlotItem()
 
         # mouse cursor (vertical line)
-        vline = pg.InfiniteLine(angle=90, pen="#B0B0B0")
-        vline.setVisible(False)
-        plot_widget.getPlotItem().addItem(vline, ignoreBounds=True)  # ensure it doesn't mess autorange
-        panel.cursor_vline = vline
+        panel.cursor_vline = pg.InfiniteLine(angle=90, pen="#B0B0B0")
+        panel.cursor_vline.setVisible(False)
+        panel.cursor_vline.setZValue(10)
+        plot_item.addItem(panel.cursor_vline, ignoreBounds=True)  # ensure it doesn't mess autorange
+
+        # mouse cursor (dot)
+        panel.cursor_dot = pg.PlotDataItem([0], [0], pen=None, symbolPen=None, symbolBrush="#C00000", symbol='o', symbolSize=7)
+        panel.cursor_dot.setVisible(False)
+        panel.cursor_dot.setZValue(10)
+        plot_item.addItem(panel.cursor_dot, ignoreBounds=True)
 
         # mouse cursor text
-        label = pg.LabelItem(justify='left')
-        label.setParentItem(plot_widget.getPlotItem().getViewBox())
-        label.anchor(itemPos=(0, 0), parentPos=(0, 0))
-        panel.cursor_label = label
+        panel.cursor_label = pg.LabelItem(justify='left')
+        panel.cursor_label.setParentItem(plot_item.getViewBox())
+        panel.cursor_label.anchor(itemPos=(0, 0), parentPos=(0, 0))
+        panel.cursor_label.setZValue(10)
+        
+        # set up mouse events
+        plot_widget.mouseMoveEvent = partial(self.on_mouse_move, panel=panel)
+        plot_widget.leaveEvent = partial(self.on_mouse_leave, panel=panel)
+        plot_widget.mousePressEvent = partial(self.on_mouse_click, panel=panel)
 
+        panel.plots_dict = {}
         self.panels[plot['panel']] = panel
 
       else:
         panel = self.panels[plot['panel']]  # reuse existing panel
-
-      plot_item = panel.plot_widget.getPlotItem()
+        plot_item = panel.plot_widget.getPlotItem()
       
       # get data points
       if plot['x'] in exp.meta:
@@ -252,7 +260,7 @@ class Plots():
       
       if exp.is_selected:  # selected lines are thicker
         style['width'] += 2
-
+        
       try:
         pen = pg.mkPen(style)
       except:  # if the style is malformed, use the default style
@@ -261,17 +269,15 @@ class Plots():
       # check if plot line already exists
       if plot['line_id'] not in panel.plots_dict:
         # create new line
-        line = panel.plot_widget.getPlotItem().plot(xs, ys, pen=pen)
-        
+        line = plot_item.plot(xs, ys, pen=pen)
         line.curve.setClickable(True, 8)  # size of hover region
-        line.mouse_over = False
-        
         panel.plots_dict[plot['line_id']] = line
       else:
         # update existing one
         line = panel.plots_dict[plot['line_id']]
         line.setData(xs, ys)
         line.setPen(pen)
+      line.mouse_over = False
 
       # for single points, plot a marker/symbol, since the line won't show up
       if len(xs) == 1:
@@ -308,66 +314,83 @@ class Plots():
     self.panels.clear()
 
 
-def mouse_move(event, panel):
-  # select curves when hovering them, and update mouse cursor
-  viewbox = panel.plot_widget.getPlotItem().vb
-  point = viewbox.mapSceneToView(event.pos())
-  
-  selected = None
-  for (line_id, line) in panel.plots_dict.items():
-    # only the first one gets selected
-    inside = (not selected and (line.curve.mouseShape().contains(point) or line.scatter.pointsAt(point)))
-
-    if inside:
-      selected = line
-      selected_id = line_id
-      if not line.mouse_over:
-        # change line style to thicker
-        line.original_pen = line.opts['pen']
-        pen = pg.mkPen(line.original_pen)
-        pen.setWidthF(line.original_pen.widthF() + 2)
-        line.setPen(pen)
-
-        # bring it to the front
-        line.setZValue(1)
-
-        line.mouse_over = True
-    else:
-      if line.mouse_over:
-        # restore line style and z-order
-        line.setPen(line.original_pen)
-        line.setZValue(0)
-        line.mouse_over = False
-
-  # show cursor (vertical line)
-  panel.cursor_vline.setVisible(True)
-  x = point.x()
-
-  if selected:
-    # snap vertical line to nearest point (by x coordinate)
-    data = selected.getData()
-    index = np.argmin(np.abs(data[0] - x))
-    (x, y) = (data[0][index], data[1][index])
-
-    # this trick prints floats with 3 significant digits and no sci notation (e.g. 1e-4). also consider integers.
-    if x % 1 == 0: x = str(int(x))
-    else: x = float('%.3g' % x)
-    if y % 1 == 0: y = str(int(y))
-    else: y = float('%.3g' % y)
+  def on_mouse_move(self, event, panel):
+    """Select curves when hovering them, and update mouse cursor text"""
+    viewbox = panel.plot_widget.getPlotItem().vb
+    point = viewbox.mapSceneToView(event.pos())
     
-    # show data coordinates and line info
-    (x_name, y_name, exp_name) = selected_id
-    text = f"{exp_name}<br/>({x_name}={x}, {y_name}={y})"
-  else:
-    text = ""
+    hovered = None
+    hovered_id = (None, None, None)
+    for (line_id, line) in panel.plots_dict.items():
+      # only the first one gets selected
+      inside = (not hovered and (line.curve.mouseShape().contains(point) or line.scatter.pointsAt(point)))
 
-  panel.cursor_label.setText(text)  #, size='10pt'
-  panel.cursor_vline.setValue(x)
+      if inside:
+        hovered = line
+        hovered_id = line_id
+        if not line.mouse_over:
+          # change line style to thicker
+          line.original_pen = line.opts['pen']
+          pen = pg.mkPen(line.original_pen)
+          pen.setWidthF(line.original_pen.widthF() + 2)
+          line.setPen(pen)
 
+          # bring it to the front
+          line.setZValue(1)
 
-def mouse_leave(event, panel):
-  # hide cursor when the mouse leaves
-  panel.cursor_vline.setVisible(False)
+          line.mouse_over = True
+      else:
+        if line.mouse_over:
+          # restore line style and z-order
+          line.setPen(line.original_pen)
+          line.setZValue(0)
+          line.mouse_over = False
+
+    # show cursor
+    panel.cursor_vline.setVisible(True)
+    x = point.x()
+
+    if hovered:
+      # snap vertical line to nearest point (by x coordinate)
+      data = hovered.getData()
+      index = np.argmin(np.abs(data[0] - x))
+      (x, y) = (data[0][index], data[1][index])
+
+      # this trick prints floats with 3 significant digits and no sci notation (e.g. 1e-4). also consider integers.
+      if x % 1 == 0: x = str(int(x))
+      else: x = float('%.3g' % x)
+      if y % 1 == 0: y = str(int(y))
+      else: y = float('%.3g' % y)
+      
+      # show data coordinates and line info
+      (x_name, y_name, exp_name) = hovered_id
+      text = f"{exp_name}<br/>({x_name}={x}, {y_name}={y})"
+
+      panel.cursor_dot.setVisible(True)
+      panel.cursor_dot.setData([x], [y])
+
+    else:
+      panel.cursor_dot.setVisible(False)
+      text = ""
+
+    # set positions and text
+    panel.cursor_label.setText(text)  #, size='10pt'
+    panel.cursor_vline.setValue(x)
+
+    self.hovered_line_id = hovered_id
+
+    pg.PlotWidget.mouseMoveEvent(panel.plot_widget, event)
+
+  def on_mouse_leave(self, event, panel):
+    """Hide cursor when the mouse leaves"""
+    panel.cursor_vline.setVisible(False)
+    panel.cursor_dot.setVisible(False)
+
+  def on_mouse_click(self, event, panel):
+    """Select experiment associated with the currently hovered line (by name)"""
+    self.window.select_experiment(self.hovered_line_id[2])
+    event.accept()
+    pg.PlotWidget.mousePressEvent(panel.plot_widget, event)
 
 
 
