@@ -65,7 +65,7 @@ class Logger:
     # write metadata to JSON file
     if self.meta:
       with open(self.directory + '/meta.json', 'w') as file:
-        json.dump(self.meta, file)
+        json.dump(self.meta, file, sort_keys=True, indent=4)
     
     # read existing CSV file and verify integrity
     if self.resume:
