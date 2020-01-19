@@ -65,6 +65,7 @@ class Plots():
     x_option = self.window.x_dropdown.currentText()
     y_option = self.window.y_dropdown.currentText()
     panel_option = self.window.panel_dropdown.currentText()
+    merge_option = self.window.merge_dropdown.currentText()
 
     # some combinations are invalid, change to sensible defaults in those cases
     if panel_option == "One per metric":
@@ -103,6 +104,9 @@ class Plots():
     else:  # single hyper-parameter selected, create one panel for each value
       panels = [(None, panel_option + ' = ' + str(exp.meta[panel_option]))]
 
+    # possibly merge lines by some hyper-parameter; otherwise, each experiment is unique
+    merge_id = (None if merge_option == "Nothing" else str(exp.meta[merge_option]))
+
     info = []  # the list of lines to plot
     for panel in panels:  # possibly spread plots across panels
       lines = [(x_name, y_name)]  # single line per panel, with these X and Y sources
@@ -121,7 +125,7 @@ class Plots():
         # final touches and compose dict
         width = 2
         style = exp.name
-        info.append(dict(panel=panel, x=x, y=y, style=style, width=width, line_id=(x, y, exp.name)))
+        info.append(dict(panel=panel, x=x, y=y, style=style, width=width, line_id=(x, y, exp.name, merge_id)))
     return info
 
   def add(self, exp):
@@ -130,126 +134,15 @@ class Plots():
       return
     plots = self.define_plots(exp)
     for plot in plots:
-      # check if panel exists
+      # create new panel if it doesn't exist
       if plot['panel'] not in self.panels:
-        # create new panel to contain plot
-        title = plot['panel'][1]
-        plot_widget = create_plot_widget(title)
-        panel = self.window.add_panel(plot_widget, title)
+        self.add_plot_panel(plot)
 
-        plot_item = panel.plot_widget.getPlotItem()
-
-        # mouse cursor (vertical line)
-        panel.cursor_vline = pg.InfiniteLine(angle=90, pen="#B0B0B0")
-        panel.cursor_vline.setVisible(False)
-        panel.cursor_vline.setZValue(10)
-        plot_item.addItem(panel.cursor_vline, ignoreBounds=True)  # ensure it doesn't mess autorange
-
-        # mouse cursor (dot)
-        panel.cursor_dot = pg.PlotDataItem([], [], pen=None, symbolPen=None, symbolBrush="#C00000", symbol='o', symbolSize=7)
-        panel.cursor_dot.setVisible(False)
-        panel.cursor_dot.setZValue(10)
-        plot_item.addItem(panel.cursor_dot, ignoreBounds=True)
-
-        # mouse cursor text
-        panel.cursor_label = pg.LabelItem(justify='left')
-        panel.cursor_label.setParentItem(plot_item.getViewBox())
-        panel.cursor_label.anchor(itemPos=(0, 0), parentPos=(0, 0))
-        panel.cursor_label.setZValue(10)
-        
-        # set up mouse events
-        plot_widget.mouseMoveEvent = partial(self.on_mouse_move, panel=panel)
-        plot_widget.leaveEvent = partial(self.on_mouse_leave, panel=panel)
-        plot_widget.mousePressEvent = partial(self.on_mouse_click, panel=panel)
-
-        panel.plots_dict = {}
-        self.panels[plot['panel']] = panel
-
-      else:
-        panel = self.panels[plot['panel']]  # reuse existing panel
-        plot_item = panel.plot_widget.getPlotItem()
+      panel = self.panels[plot['panel']]  # reuse existing panel
+      plot_item = panel.plot_widget.getPlotItem()
       
-      # get data points
-      if plot['x'] in exp.meta:
-        xs = [exp.meta[plot['x']]]  # a single point, with the chosen hyper-parameter
-      else:
-        xs = exp.data[exp.names.index(plot['x'])]  # several points, with the chosen metric
-
-      if plot['y'] in exp.meta:
-        ys = [exp.meta[plot['y']]]
-      else:
-        ys = exp.data[exp.names.index(plot['y'])]
-
-      # if one axis is a scalar (hyper-parameter) and another is not (metric), only show
-      # a single data point. use "scalar display" option to decide which metric to keep.
-      if len(xs) == 1 or len(ys) == 1:
-        scalar_option = self.window.scalar_dropdown.currentText()
-        if scalar_option == 'Last value':
-          if len(xs) > 1: xs = [xs[-1]]
-          if len(ys) > 1: ys = [ys[-1]]
-        elif scalar_option == 'Maximum':
-          if len(xs) > 1: xs = [max(xs)]
-          if len(ys) > 1: ys = [max(ys)]
-        elif scalar_option == 'Minimum':
-          if len(xs) > 1: xs = [min(xs)]
-          if len(ys) > 1: ys = [min(ys)]
-
-      assert len(xs) == len(ys)
-
-      # check data points' types to know what axes to create (numeric, time or categorical)
-      x_is_time = all(isinstance(x, datetime) for x in xs)
-      y_is_time = all(isinstance(y, datetime) for y in ys)
-      x_is_numeric = len(xs) == 0 or all(isinstance(x, Number) and not isinstance(x, bool) for x in xs)
-      y_is_numeric = len(xs) == 0 or all(isinstance(y, Number) and not isinstance(y, bool) for y in ys)
-
-      # handle datetimes
-      if x_is_time:
-        # create time axes if needed, and convert datetimes to numeric values
-        if not isinstance(plot_item.axes['bottom']['item'], DateAxisItem):
-          axis = DateAxisItem(orientation='bottom')
-          axis.attachToPlotItem(plot_item)
-        xs = [timestamp(x) for x in xs]
-
-      if y_is_time:
-        if not isinstance(plot_item.axes['left']['item'], DateAxisItem):
-          axis = DateAxisItem(orientation='left')
-          axis.attachToPlotItem(plot_item)
-        ys = [timestamp(y) for y in ys]
-
-      # handle categorical values
-      if not x_is_numeric:
-        axes = plot_item.axes['bottom']['item']
-        if axes._tickLevels is None:  # initialize
-          axes.setTicks([[]])
-          axes.ticks_dict = {}
-          axes.next_tick = 0
-        ticks_dict = axes.ticks_dict
-
-        xs = [str(x) for x in xs]  # ensure they're all strings
-        for x in set(xs):  # iterate unique values
-          if x not in axes.ticks_dict:  # add tick if this value is new
-            ticks_dict[x] = axes.next_tick
-            axes._tickLevels[0].append((axes.next_tick, x))
-            axes.next_tick += 1
-
-        xs = [ticks_dict[x] for x in xs]  # convert to numeric value, by look-up
-
-      if not y_is_numeric:
-        axes = plot_item.axes['left']['item']
-        if axes._tickLevels is None:  # initialize
-          axes.setTicks([[]])
-          axes.ticks_dict = {}
-          axes.next_tick = 0
-        ticks_dict = axes.ticks_dict
-
-        ys = [str(y) for y in ys]  # ensure they're all strings
-        for y in set(ys):  # iterate unique values
-          if y not in axes.ticks_dict:  # add tick if this value is new
-            ticks_dict[y] = axes.next_tick
-            axes._tickLevels[0].append((axes.next_tick, y))
-            axes.next_tick += 1
-            
-        ys = [ticks_dict[y] for y in ys]  # convert to numeric value, by look-up
+      # get data points, pre-processed to ensure they are numeric. this may edit the axes.
+      (xs, ys) = self.get_numeric_data_points(exp, plot)
 
       # allow overriding the style
       style = dict(exp.style)  # explicit copy since we'll change it
@@ -290,6 +183,132 @@ class Plots():
       line.setData(**data)
       line.mouse_over = False
   
+  def add_plot_panel(self, plot):
+    """Adds a single plot panel, from its description as output
+    by define_plots. Used by Plots.add."""
+
+    # create new panel to contain plot
+    title = plot['panel'][1]
+    plot_widget = create_plot_widget(title)
+    panel = self.window.add_panel(plot_widget, title)
+
+    plot_item = panel.plot_widget.getPlotItem()
+
+    # mouse cursor (vertical line)
+    panel.cursor_vline = pg.InfiniteLine(angle=90, pen="#B0B0B0")
+    panel.cursor_vline.setVisible(False)
+    panel.cursor_vline.setZValue(10)
+    plot_item.addItem(panel.cursor_vline, ignoreBounds=True)  # ensure it doesn't mess autorange
+
+    # mouse cursor (dot)
+    panel.cursor_dot = pg.PlotDataItem([], [], pen=None, symbolPen=None, symbolBrush="#C00000", symbol='o', symbolSize=7)
+    panel.cursor_dot.setVisible(False)
+    panel.cursor_dot.setZValue(10)
+    plot_item.addItem(panel.cursor_dot, ignoreBounds=True)
+
+    # mouse cursor text
+    panel.cursor_label = pg.LabelItem(justify='left')
+    panel.cursor_label.setParentItem(plot_item.getViewBox())
+    panel.cursor_label.anchor(itemPos=(0, 0), parentPos=(0, 0))
+    panel.cursor_label.setZValue(10)
+    
+    # set up mouse events
+    plot_widget.mouseMoveEvent = partial(self.on_mouse_move, panel=panel)
+    plot_widget.leaveEvent = partial(self.on_mouse_leave, panel=panel)
+    plot_widget.mousePressEvent = partial(self.on_mouse_click, panel=panel)
+
+    panel.plots_dict = {}
+    self.panels[plot['panel']] = panel
+
+  def get_numeric_data_points(self, exp, plot):
+    """Retrieves the data points for a single plot, from its define_plots
+    description. Reduction to scalar (single point) is applied if needed, and
+    time/categorical data is converted to numeric coordinates. Used by Plots.add."""
+
+    if plot['x'] in exp.meta:
+      xs = [exp.meta[plot['x']]]  # a single point, with the chosen hyper-parameter
+    else:
+      xs = exp.data[exp.names.index(plot['x'])]  # several points, with the chosen metric
+
+    if plot['y'] in exp.meta:
+      ys = [exp.meta[plot['y']]]
+    else:
+      ys = exp.data[exp.names.index(plot['y'])]
+
+    # if one axis is a scalar (hyper-parameter) and another is not (metric), only show
+    # a single data point. use "scalar display" option to decide which metric to keep.
+    if len(xs) == 1 or len(ys) == 1:
+      scalar_option = self.window.scalar_dropdown.currentText()
+      if scalar_option == 'Last value':
+        if len(xs) > 1: xs = [xs[-1]]
+        if len(ys) > 1: ys = [ys[-1]]
+      elif scalar_option == 'Maximum':
+        if len(xs) > 1: xs = [max(xs)]
+        if len(ys) > 1: ys = [max(ys)]
+      elif scalar_option == 'Minimum':
+        if len(xs) > 1: xs = [min(xs)]
+        if len(ys) > 1: ys = [min(ys)]
+
+    assert len(xs) == len(ys)
+
+    # check data points' types to know what axes to create (numeric, time or categorical)
+    x_is_time = all(isinstance(x, datetime) for x in xs)
+    y_is_time = all(isinstance(y, datetime) for y in ys)
+    x_is_numeric = len(xs) == 0 or all(isinstance(x, Number) and not isinstance(x, bool) for x in xs)
+    y_is_numeric = len(xs) == 0 or all(isinstance(y, Number) and not isinstance(y, bool) for y in ys)
+
+    # handle datetimes
+    if x_is_time:
+      # create time axes if needed, and convert datetimes to numeric values
+      if not isinstance(plot_item.axes['bottom']['item'], DateAxisItem):
+        axis = DateAxisItem(orientation='bottom')
+        axis.attachToPlotItem(plot_item)
+      xs = [timestamp(x) for x in xs]
+
+    if y_is_time:
+      if not isinstance(plot_item.axes['left']['item'], DateAxisItem):
+        axis = DateAxisItem(orientation='left')
+        axis.attachToPlotItem(plot_item)
+      ys = [timestamp(y) for y in ys]
+
+    # handle categorical values
+    if not x_is_numeric:
+      axes = plot_item.axes['bottom']['item']
+      if axes._tickLevels is None:  # initialize
+        axes.setTicks([[]])
+        axes.ticks_dict = {}
+        axes.next_tick = 0
+      ticks_dict = axes.ticks_dict
+
+      # TODO: improve performance
+      xs = [str(x) for x in xs]  # ensure they're all strings
+      for x in set(xs):  # iterate unique values
+        if x not in axes.ticks_dict:  # add tick if this value is new
+          ticks_dict[x] = axes.next_tick
+          axes._tickLevels[0].append((axes.next_tick, x))
+          axes.next_tick += 1
+
+      xs = [ticks_dict[x] for x in xs]  # convert to numeric value, by look-up
+
+    if not y_is_numeric:
+      axes = plot_item.axes['left']['item']
+      if axes._tickLevels is None:  # initialize
+        axes.setTicks([[]])
+        axes.ticks_dict = {}
+        axes.next_tick = 0
+      ticks_dict = axes.ticks_dict
+
+      ys = [str(y) for y in ys]  # ensure they're all strings
+      for y in set(ys):  # iterate unique values
+        if y not in axes.ticks_dict:  # add tick if this value is new
+          ticks_dict[y] = axes.next_tick
+          axes._tickLevels[0].append((axes.next_tick, y))
+          axes.next_tick += 1
+          
+      ys = [ticks_dict[y] for y in ys]  # convert to numeric value, by look-up
+    
+    return (xs, ys)
+
   def remove(self, exp):
     """Removes all plots associated with an experiment (inverse of Plots.add)"""
     if len(exp.names) == 0:  # no data yet
@@ -376,7 +395,7 @@ class Plots():
       else: y = float('%.3g' % y)
       
       # show data coordinates and line info
-      (x_name, y_name, exp_name) = hovered_id
+      (x_name, y_name, exp_name, merge_id) = hovered_id
       text = f"{exp_name}<br/>({x_name}={x}, {y_name}={y})"
 
     else:

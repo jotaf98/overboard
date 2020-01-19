@@ -70,7 +70,6 @@ class Window(QtWidgets.QMainWindow):
     dropdown.addItem('Panel metric')
     dropdown.addItem('All metrics')
     dropdown.setCurrentText(self.settings.value('x_dropdown', 'First metric'))
-    dropdown.activated.connect(self.rebuild_plots) 
     sidebar.addWidget(dropdown, 1, 1)
     self.x_dropdown = dropdown
 
@@ -80,7 +79,6 @@ class Window(QtWidgets.QMainWindow):
     dropdown.addItem('Panel metric')
     dropdown.addItem('All metrics')
     dropdown.setCurrentText(self.settings.value('y_dropdown', 'Panel metric'))
-    dropdown.activated.connect(self.rebuild_plots) 
     sidebar.addWidget(dropdown, 2, 1)
     self.y_dropdown = dropdown
 
@@ -90,7 +88,6 @@ class Window(QtWidgets.QMainWindow):
     dropdown.addItem('One per metric')
     dropdown.addItem('One per experiment')
     dropdown.setCurrentText(self.settings.value('panel_dropdown', 'One per metric'))
-    dropdown.activated.connect(self.rebuild_plots) 
     sidebar.addWidget(dropdown, 3, 1)
     self.panel_dropdown = dropdown
 
@@ -100,23 +97,29 @@ class Window(QtWidgets.QMainWindow):
     dropdown.addItem('Maximum')
     dropdown.addItem('Minumum')
     dropdown.setCurrentText(self.settings.value('scalar_dropdown', 'Last value'))
-    dropdown.activated.connect(self.rebuild_plots) 
     sidebar.addWidget(dropdown, 4, 1)
     self.scalar_dropdown = dropdown
 
+    sidebar.addWidget(QtWidgets.QLabel('Merge'), 5, 0)
+    dropdown = QtWidgets.QComboBox()
+    dropdown.addItem('Nothing')
+    dropdown.setCurrentText(self.settings.value('merge_dropdown', 'Nothing'))
+    sidebar.addWidget(dropdown, 5, 1)
+    self.merge_dropdown = dropdown
+
     # experiments filter text box
-    sidebar.addWidget(QtWidgets.QLabel('Filter'), 5, 0)
+    sidebar.addWidget(QtWidgets.QLabel('Filter'), 6, 0)
     edit = QtWidgets.QLineEdit(self.settings.value('filter_edit', ''))
     edit.setPlaceholderText('Hover for help')
     edit.returnPressed.connect(self.on_filter_ready)
     edit.setToolTipDuration(60000)  # 1 minute
     edit.setToolTip(filter_tooltip_text)
     edit.focusInEvent = self.on_filter_focus
-    sidebar.addWidget(edit, 5, 1)
+    sidebar.addWidget(edit, 6, 1)
     self.filter_edit = edit
     self.compiled_filter = None  # compiled code of filter
 
-    # auto-complete
+    # filter auto-complete
     completer = QtWidgets.QCompleter(self.settings.value('filter_completer', []))
     edit.setCompleter(completer)
 
@@ -193,6 +196,9 @@ class Window(QtWidgets.QMainWindow):
     # window size and title
     self.resize(screen_size.width() * 0.6, screen_size.height() * 0.95)
     self.setWindowTitle('OverBoard - ' + args.folder)
+
+    for widget in [self.x_dropdown, self.y_dropdown, self.panel_dropdown, self.scalar_dropdown, self.merge_dropdown]:
+      widget.activated.connect(self.rebuild_plots) 
 
     # compile loaded filter
     self.on_filter_ready()
@@ -319,13 +325,10 @@ class Window(QtWidgets.QMainWindow):
 
     # update dropdown lists to include all hyper-parameter names
     for arg_name in exp.meta.keys():
-      if self.x_dropdown.findText(arg_name) < 0:
-        self.x_dropdown.addItem(arg_name)
-      if self.y_dropdown.findText(arg_name) < 0:
-        self.y_dropdown.addItem(arg_name)
-      if self.panel_dropdown.findText(arg_name) < 0:
-        self.panel_dropdown.addItem(arg_name)
-
+      for widget in [self.x_dropdown, self.y_dropdown, self.panel_dropdown, self.merge_dropdown]:
+        if widget.findText(arg_name) < 0:
+          widget.addItem(arg_name)
+          
     # hide row if filter says so
     self.filter_experiment(exp)
 
@@ -540,6 +543,7 @@ class Window(QtWidgets.QMainWindow):
     self.settings.setValue('y_dropdown', self.y_dropdown.currentText())
     self.settings.setValue('panel_dropdown', self.panel_dropdown.currentText())
     self.settings.setValue('scalar_dropdown', self.scalar_dropdown.currentText())
+    self.settings.setValue('merge_dropdown', self.merge_dropdown.currentText())
     self.settings.setValue('filter_edit', self.filter_edit.text())
 
     # save auto-complete model for filter, up to 50 entries
