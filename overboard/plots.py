@@ -271,20 +271,24 @@ class Plots():
       # check if plot line already exists
       if plot['line_id'] not in panel.plots_dict:
         # create new line
-        line = plot_item.plot(xs, ys, pen=pen)
+        line = plot_item.plot([], [])
         line.curve.setClickable(True, 8)  # size of hover region
         panel.plots_dict[plot['line_id']] = line
       else:
         # update existing one
         line = panel.plots_dict[plot['line_id']]
-        line.setData(xs, ys)
-        line.setPen(pen)
-      line.mouse_over = False
+
+      data = dict(x=xs, y=ys, pen=pen)  # args to assign to PlotDataItem line
 
       # for single points, plot a marker/symbol, since the line won't show up
       if len(xs) == 1:
-        line.setSymbol('o')
-        line.setSymbolBrush(pen.color())
+        data['symbol'] = 'o'
+        data['symbolBrush'] = pen.color()
+        data['symbolSize'] = style['width'] * 2 + 4
+
+      # assign the data
+      line.setData(**data)
+      line.mouse_over = False
   
   def remove(self, exp):
     """Removes all plots associated with an experiment (inverse of Plots.add)"""
@@ -364,7 +368,8 @@ class Plots():
       panel.cursor_dot.setVisible(True)
       panel.cursor_dot.setData([x], [y])
 
-      # this trick prints floats with 3 significant digits and no sci notation (e.g. 1e-4). also consider integers.
+      # print floats with 3 significant digits and no sci notation
+      # (e.g. 1e-4). also consider integers.
       if x % 1 == 0: x = str(int(x))
       else: x = float('%.3g' % x)
       if y % 1 == 0: y = str(int(y))

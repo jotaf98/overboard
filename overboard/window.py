@@ -22,7 +22,7 @@ from .plots import Smoother
 
 filter_tooltip_text = """Write a Python expression and then press Enter to filter.
 Example: regularization >= 0.1 and batch_norm == True
-Experiments (displayed as table rows) for which the expression evaluates to False will be hidden.
+Experiments (displayed as table rows) for which the expression evaluates to False will be hidden. If empty, experiments are not filtered.
 Any hyper-parameters (displayed as table column headers) can be used in this expression.
 Hyper-parameters are saved automatically by passing them to the Logger instance that records results (see Logger documentation)."""
 
