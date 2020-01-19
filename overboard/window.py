@@ -111,6 +111,7 @@ class Window(QtWidgets.QMainWindow):
     edit.returnPressed.connect(self.on_filter_ready)
     edit.setToolTipDuration(60000)  # 1 minute
     edit.setToolTip(filter_tooltip_text)
+    edit.focusInEvent = self.on_filter_focus
     sidebar.addWidget(edit, 5, 1)
     self.filter_edit = edit
     self.compiled_filter = None  # compiled code of filter
@@ -472,10 +473,11 @@ class Window(QtWidgets.QMainWindow):
         if err: return
       
       # add to auto-complete model, if there was no error
+      text = self.filter_edit.text()
       model = self.filter_edit.completer().model()
       entries = model.stringList()
-      if self.filter_edit.text() not in entries:
-        entries.insert(0, self.filter_edit.text())  # insert at top of list
+      if text and text not in entries:
+        entries.insert(0, text)  # insert at top of list
         model.setStringList(entries)
 
   def filter_experiment(self, exp):
@@ -511,6 +513,11 @@ class Window(QtWidgets.QMainWindow):
     text = err.__class__.__name__ + ": " + str(err)
     QtGui.QToolTip.showText(QtGui.QCursor.pos(), text, self.filter_edit)
     self.filter_edit.setStyleSheet("color: #B00000;")
+
+  def on_filter_focus(self, event):
+    """Event handler for when filter line-edit widget gets focus"""
+    self.filter_edit.completer().complete()
+    self.filter_edit.completer().popup().show()
 
   def on_size_slider_changed(self):
     """Resize panels for plots and visualizations"""
