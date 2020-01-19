@@ -20,6 +20,13 @@ from .fastslider import Slider
 from .plots import Smoother
 
 
+filter_tooltip_text = """Write a Python expression and then press Enter to filter.
+Example: regularization >= 0.1 and batch_norm == True
+Experiments (displayed as table rows) for which the expression evaluates to False will be hidden.
+Any hyper-parameters (displayed as table column headers) can be used in this expression.
+Hyper-parameters are saved automatically by passing them to the Logger instance that records results (see Logger documentation)."""
+
+
 class Window(QtWidgets.QMainWindow):
   def __init__(self, args):
     super(Window, self).__init__(parent=None)
@@ -101,8 +108,10 @@ class Window(QtWidgets.QMainWindow):
     sidebar.addWidget(QtWidgets.QLabel('Filter'), 5, 0)
 
     edit = QtWidgets.QLineEdit(self.settings.value('filter_edit', ''))
-    edit.setPlaceholderText('Write filter and press <enter>')
+    edit.setPlaceholderText('Hover for help')
     edit.returnPressed.connect(self.on_filter_ready)
+    edit.setToolTipDuration(60000)  # 1 minute
+    edit.setToolTip(filter_tooltip_text)
     sidebar.addWidget(edit, 5, 1)
     self.filter_edit = edit
 

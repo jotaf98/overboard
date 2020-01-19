@@ -20,9 +20,25 @@ def get_timestamp(microseconds=True):
 
 
 class Logger:
+  """Writes experiment data to a directory."""
+
   def __init__(self, directory, stat_names=None, meta=None, save_timestamp=True, resume=False):
-    """Initialize log writer on a new directory.
-       The main file that is written is "stats.csv", containing one column for each stat."""
+    """Initialize log writer for a single experiment.
+
+  directory: str
+    Directory where data will be stored, unique to this experiment. The main file that is written is "stats.csv", containing one column for each metric.
+
+  meta: dict or argparse.Namespace [empty]
+    Meta-data, which can consist of hyper-parameter names and values. Useful for sorting and inspecting experiments. A convenient method is to use the output of the argparse module, so any command-line options are stored as meta-data.
+
+  resume: bool [False]
+    Appends new data to an existing log, to resume an experiment.
+
+  save_timestamp: bool [True]
+    Saves the current time as a "timestamp" entry in the meta-data.
+
+  stat_names: list of str [automatic]
+    Defines the column names (metrics) written to the "stats.csv" file. Otherwise, they are set automatically when Logger.append is called for the first time, and cannot be changed later. This argument is useful if you want to define a larger set of columns than those written in the first call to Logger.append."""
 
     if stat_names and not (all(isinstance(name, str) and not ',' in name for name in stat_names)):
       raise ValueError('stat_names must be a list of strings with no commas, if specified.')
