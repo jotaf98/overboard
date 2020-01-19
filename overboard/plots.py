@@ -12,6 +12,7 @@ from functools import partial
 import heapq, logging
 from datetime import datetime
 from numbers import Number
+from itertools import zip_longest
 import numpy as np
 
 import pyqtgraph as pg
@@ -105,7 +106,8 @@ class Plots():
       panels = [(None, panel_option + ' = ' + str(exp.meta[panel_option]))]
 
     # possibly merge lines by some hyper-parameter; otherwise, each experiment is unique
-    merge_id = (None if merge_option == "Nothing" else str(exp.meta[merge_option]))
+    merge_info = (None if merge_option == "Nothing" else exp.name)
+    line_id = (exp.name if merge_option == "Nothing" else str(exp.meta[merge_option]))
 
     info = []  # the list of lines to plot
     for panel in panels:  # possibly spread plots across panels
@@ -125,7 +127,7 @@ class Plots():
         # final touches and compose dict
         width = 2
         style = exp.name
-        info.append(dict(panel=panel, x=x, y=y, style=style, width=width, line_id=(x, y, exp.name, merge_id)))
+        info.append(dict(panel=panel, x=x, y=y, style=style, width=width, line_id=(x, y, line_id), merge_info=merge_info))
     return info
 
   def add(self, exp):
@@ -170,8 +172,14 @@ class Plots():
       else:
         # update existing one
         line = panel.plots_dict[plot['line_id']]
+      line.mouse_over = False
 
-      data = dict(x=xs, y=ys, pen=pen)  # args to assign to PlotDataItem line
+      # handle merged plots, by updating the statistics to display first
+      if plot['merge_info'] is not None:
+        (xs, ys, shade_size) = self.update_merged_stats(line, xs, ys, plot['merge_info'])
+
+      # args to assign to PlotDataItem line
+      data = dict(x=xs, y=ys, pen=pen)
 
       # for single points, plot a marker/symbol, since the line won't show up
       if len(xs) == 1:
@@ -181,7 +189,27 @@ class Plots():
 
       # assign the data
       line.setData(**data)
-      line.mouse_over = False
+
+      # finish merged plots, by plotting the shaded part
+      if plot['merge_info'] is not None:
+        if plot['line_id'] not in panel.aux_plots_dict:
+          # create for first time. we need 2 curves, setting the upper and lower
+          # limits, and then a FillBetweenItem to shade the space between them.
+          limit1 = plot_item.plot([], [])
+          limit2 = plot_item.plot([], [])
+          shade = pg.FillBetweenItem(limit1, limit2, (200, 0, 0, 128))
+          plot_item.addItem(shade)
+          panel.aux_plots_dict[plot['line_id']] = (limit1, limit2, shade)
+        else:
+          (limit1, limit2, shade) = panel.aux_plots_dict[plot['line_id']]
+
+        limit1.setData(x=xs, y=ys-shade_size)
+        limit2.setData(x=xs, y=ys+shade_size)
+
+        # use same color but semi-transparent
+        c = pen.color()
+        shade.setBrush((c.red(), c.green(), c.blue(), 64))
+
   
   def add_plot_panel(self, plot):
     """Adds a single plot panel, from its description as output
@@ -218,6 +246,7 @@ class Plots():
     plot_widget.mousePressEvent = partial(self.on_mouse_click, panel=panel)
 
     panel.plots_dict = {}
+    panel.aux_plots_dict = {}
     self.panels[plot['panel']] = panel
 
   def get_numeric_data_points(self, exp, plot):
@@ -309,6 +338,38 @@ class Plots():
     
     return (xs, ys)
 
+  def update_merged_stats(self, line, xs, ys, merge_info):
+    # update the unmerged data, stored in the line object
+    if not hasattr(line, 'unmerged_xs'):
+      line.unmerged_xs = {}
+      line.unmerged_ys = {}
+    
+    if xs is not None:  # add it
+      line.unmerged_xs[merge_info] = xs
+    else:  # deleting this entry
+      del line.unmerged_xs[merge_info]
+      if len(line.unmerged_xs) == 0:  # nothing left
+        return (None, None, None)
+
+    if ys is not None:
+      line.unmerged_ys[merge_info] = ys
+    else:
+      del line.unmerged_ys[merge_info]
+      if len(line.unmerged_xs) == 0:
+        return (None, None, None)
+
+    # convert all data to numpy arrays, shape = (max number of points, number of repeats)
+    # zip_longest is needed to fill in missing values with NaN, for incomplete lines.
+    all_xs = np.array(list(zip_longest(*list(line.unmerged_xs.values()), fillvalue=np.nan)))
+    all_ys = np.array(list(zip_longest(*list(line.unmerged_ys.values()), fillvalue=np.nan)))
+
+    # compute statistics
+    xs = np.nanmean(all_xs, axis=1, keepdims=False)
+    ys = np.nanmean(all_ys, axis=1, keepdims=False)
+    shade_size = np.nanstd(all_ys, axis=1, keepdims=False)
+
+    return (xs, ys, shade_size)
+
   def remove(self, exp):
     """Removes all plots associated with an experiment (inverse of Plots.add)"""
     if len(exp.names) == 0:  # no data yet
@@ -322,11 +383,32 @@ class Plots():
         # find plot line
         line_id = plot['line_id']
         if line_id in panel.plots_dict:
-          # remove it
-          plot_item = panel.plot_widget.getPlotItem()
-          plot_item.removeItem(panel.plots_dict[line_id])
-          del panel.plots_dict[line_id]
-        
+          line = panel.plots_dict[line_id]
+
+          if plot['merge_info'] is not None:
+            # remove this data from the merged line, and update it
+            (xs, ys, shade_size) = self.update_merged_stats(line, None, None, plot['merge_info'])
+            if xs is not None:
+              (limit1, limit2, shade) = panel.aux_plots_dict[plot['line_id']]
+              limit1.setData(x=xs, y=ys-shade_size)
+              limit2.setData(x=xs, y=ys+shade_size)
+            else:
+              # removed final line, nothing left
+              plot['merge_info'] = None
+              
+              # remove auxiliary plots (e.g. shaded merged plots)
+              if line_id in panel.aux_plots_dict:
+                plot_item = panel.plot_widget.getPlotItem()
+                for aux_object in panel.aux_plots_dict[line_id]:
+                  plot_item.removeItem(aux_object)
+                del panel.aux_plots_dict[line_id]
+          
+          if plot['merge_info'] is None:
+            # simple line, remove it
+            plot_item = panel.plot_widget.getPlotItem()
+            plot_item.removeItem(line)
+            del panel.plots_dict[line_id]
+
         # if the last line was deleted, delete the panel too
         if len(panel.plots_dict) == 0:
           panel.setParent(None)
@@ -395,7 +477,7 @@ class Plots():
       else: y = float('%.3g' % y)
       
       # show data coordinates and line info
-      (x_name, y_name, exp_name, merge_id) = hovered_id
+      (x_name, y_name, exp_name) = hovered_id[:3]
       text = f"{exp_name}<br/>({x_name}={x}, {y_name}={y})"
 
     else:
