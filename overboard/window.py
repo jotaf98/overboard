@@ -106,7 +106,6 @@ class Window(QtWidgets.QMainWindow):
 
     # experiments filter text box
     sidebar.addWidget(QtWidgets.QLabel('Filter'), 5, 0)
-
     edit = QtWidgets.QLineEdit(self.settings.value('filter_edit', ''))
     edit.setPlaceholderText('Hover for help')
     edit.returnPressed.connect(self.on_filter_ready)
@@ -114,11 +113,11 @@ class Window(QtWidgets.QMainWindow):
     edit.setToolTip(filter_tooltip_text)
     sidebar.addWidget(edit, 5, 1)
     self.filter_edit = edit
+    self.compiled_filter = None  # compiled code of filter
 
-    # auto-complete (TODO)
-    #initial_suggestions = ['A', 'B']
-    #completer = QtWidgets.QCompleter(self.settings.value('filter_completer', initial_suggestions))
-    #edit.setCompleter(completer)
+    # auto-complete
+    completer = QtWidgets.QCompleter(self.settings.value('filter_completer', []))
+    edit.setCompleter(completer)
 
 
     """# smoothness slider
@@ -193,6 +192,9 @@ class Window(QtWidgets.QMainWindow):
     # window size and title
     self.resize(screen_size.width() * 0.6, screen_size.height() * 0.95)
     self.setWindowTitle('OverBoard - ' + args.folder)
+
+    # compile loaded filter
+    self.on_filter_ready()
 
   def process_events_if_needed(self):
     if time() - self.last_process_events > 0.5:  # limit to once every 0.5 seconds      
@@ -323,11 +325,11 @@ class Window(QtWidgets.QMainWindow):
       if self.panel_dropdown.findText(arg_name) < 0:
         self.panel_dropdown.addItem(arg_name)
 
+    # hide row if filter says so
+    self.filter_experiment(exp)
+
     self.process_events_if_needed()
 
-    # hide row if filter says so. TODO: could be more efficient, this iterates all experiments
-    self.on_filter_ready()
-  
   def on_exp_header_ready(self, exp):
     """Called by Experiment when the header data (metrics/column names) has been read"""
     # update dropdown lists to include all metric names
@@ -452,42 +454,63 @@ class Window(QtWidgets.QMainWindow):
 
   def on_filter_ready(self):
     """User pressed Enter in filter text box, filter the experiments"""
-    if len(self.filter_edit.text().strip()) == 0:
-      # no filter, show all experiments
-      for exp in self.experiments.exps.values():
-        if exp.is_filtered:
-          self.table.setRowHidden(exp.table_row.row(), False)
-          if exp.visible:
-            self.plots.add(exp)
-          exp.is_filtered = False
+    if len(self.filter_edit.text().strip()) == 0:  # no filter
+      self.compiled_filter = None
       self.filter_edit.setStyleSheet("color: black;")
-
     else:
       # compile filter code
       try:
-        func = compile(self.filter_edit.text(), '<filter>', 'eval')
+        self.compiled_filter = compile(self.filter_edit.text(), '<filter>', 'eval')
         self.filter_edit.setStyleSheet("color: black;")
-      except:  # error
-        self.filter_edit.setStyleSheet("color: #B00000;")
+      except Exception as err:
+        self.show_filter_error(err)
         return
 
+    if self.experiments is not None:
       for exp in self.experiments.exps.values():
-        # evaluate filter to obtain boolean
-        try:
-          hide = not eval(func, exp.meta, exp.meta)
-        except:  # error
-          self.filter_edit.setStyleSheet("color: #B00000;")
-          continue
+        err = self.filter_experiment(exp)
+        if err: return
+      
+      # add to auto-complete model, if there was no error
+      model = self.filter_edit.completer().model()
+      entries = model.stringList()
+      if self.filter_edit.text() not in entries:
+        entries.insert(0, self.filter_edit.text())  # insert at top of list
+        model.setStringList(entries)
 
-        # hide or show depending on context
-        self.table.setRowHidden(exp.table_row.row(), hide)
-        if hide:
-          if not exp.is_filtered:
-            self.plots.remove(exp)
-        else:
-          if exp.is_filtered and exp.visible:
-            self.plots.add(exp)
-        exp.is_filtered = hide
+  def filter_experiment(self, exp):
+    """Apply filter to a single experiment, hiding it or showing it"""
+    if self.compiled_filter is None:
+      # no filter, show experiment unconditionally
+      if exp.is_filtered:
+        self.table.setRowHidden(exp.table_row.row(), False)
+        if exp.visible:
+          self.plots.add(exp)
+        exp.is_filtered = False
+    else:
+      # evaluate filter to obtain boolean
+      try:
+        hide = not eval(self.compiled_filter, exp.meta, exp.meta)
+      except Exception as err:
+        self.show_filter_error(err)
+        return True
+
+      # hide or show depending on context
+      self.table.setRowHidden(exp.table_row.row(), hide)
+      if hide:
+        if not exp.is_filtered:
+          self.plots.remove(exp)
+      else:
+        if exp.is_filtered and exp.visible:
+          self.plots.add(exp)
+      exp.is_filtered = hide
+      return False
+
+  def show_filter_error(self, err):
+    """Show filter expression error as a tooltip, and change color to red"""
+    text = err.__class__.__name__ + ": " + str(err)
+    QtGui.QToolTip.showText(QtGui.QCursor.pos(), text, self.filter_edit)
+    self.filter_edit.setStyleSheet("color: #B00000;")
 
   def on_size_slider_changed(self):
     """Resize panels for plots and visualizations"""
@@ -512,9 +535,10 @@ class Window(QtWidgets.QMainWindow):
     self.settings.setValue('scalar_dropdown', self.scalar_dropdown.currentText())
     self.settings.setValue('filter_edit', self.filter_edit.text())
 
-    #m = self.filter_edit.completer().model()
-    #suggestions = [m.data(m.index(i), 0) for i in range(m.rowCount())]
-    #self.settings.setValue('filter_completer', suggestions)
+    # save auto-complete model for filter, up to 50 entries
+    m = self.filter_edit.completer().model()
+    history = [m.data(m.index(i), 0) for i in range(min(50, m.rowCount()))]
+    self.settings.setValue('filter_completer', history)
 
     self.settings.sync()
     event.accept()
