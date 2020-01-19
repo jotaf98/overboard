@@ -428,7 +428,7 @@ class Window(QtWidgets.QMainWindow):
     Passing None deselects previous one."""
 
     if isinstance(exp, str):  # experiment name, look it up
-      exp = self.experiments.exps[exp]
+      exp = self.experiments.exps.get(exp, None)
 
     # unselect previous experiment first
     (old_exp, old_icon) = self.selected_exp
@@ -520,7 +520,6 @@ class Window(QtWidgets.QMainWindow):
   def on_filter_focus(self, event):
     """Event handler for when filter line-edit widget gets focus"""
     self.filter_edit.completer().complete()
-    self.filter_edit.completer().popup().show()
 
   def on_size_slider_changed(self):
     """Resize panels for plots and visualizations"""
