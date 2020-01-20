@@ -526,6 +526,7 @@ class Window(QtWidgets.QMainWindow):
 
   def on_filter_focus(self, event):
     """Event handler for when filter line-edit widget gets focus"""
+    QtWidgets.QLineEdit.focusInEvent(self.filter_edit, event)
     self.filter_edit.completer().complete()
 
   def on_size_slider_changed(self):
