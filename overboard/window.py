@@ -120,9 +120,10 @@ class Window(QtWidgets.QMainWindow):
     self.compiled_filter = None  # compiled code of filter
 
     # filter auto-complete
-    completer = QtWidgets.QCompleter(self.settings.value('filter_completer', []))
+    history = self.settings.value('filter_completer', None)
+    if history is None: history = []  # QSettings doesn't like this empty list as default value
+    completer = QtWidgets.QCompleter(history)
     edit.setCompleter(completer)
-
 
     """# smoothness slider
     sidebar.addWidget(QtWidgets.QLabel('Smoothness'))
@@ -493,9 +494,14 @@ class Window(QtWidgets.QMainWindow):
           self.plots.add(exp)
         exp.is_filtered = False
     else:
+      # create a dict with the hyper-parameters from this experiment, and all
+      # missing hyper-parameters set to None, to be accessed by the filter function.
+      vars_table = dict(zip(self.table_args.keys(), [None] * len(self.table_args)))
+      vars_table.update(exp.meta)
+
       # evaluate filter to obtain boolean
       try:
-        hide = not eval(self.compiled_filter, exp.meta, exp.meta)
+        hide = not eval(self.compiled_filter, vars_table, vars_table)
       except Exception as err:
         self.show_filter_error(err)
         return True

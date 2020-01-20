@@ -103,7 +103,7 @@ class Plots():
       panels = [(None, y_name + ' by ' + x_name)]
     
     else:  # single hyper-parameter selected, create one panel for each value
-      panels = [(None, panel_option + ' = ' + str(exp.meta[panel_option]))]
+      panels = [(None, panel_option + ' = ' + str(exp.meta.get(panel_option, None)))]  # None if missing
 
     # possibly merge lines by some hyper-parameter; otherwise, each experiment is unique
     merge_info = (None if merge_option == "Nothing" else exp.name)
