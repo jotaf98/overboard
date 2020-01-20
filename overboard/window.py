@@ -21,10 +21,12 @@ from .plots import Smoother
 
 
 filter_tooltip_text = """Write a Python expression and then press Enter to filter.
+
 Example: regularization >= 0.1 and batch_norm == True
-Experiments (displayed as table rows) for which the expression evaluates to False will be hidden. If empty, experiments are not filtered.
+
+Runs (displayed as table rows) for which the expression evaluates to False will be hidden.
 Any hyper-parameters (displayed as table column headers) can be used in this expression.
-Hyper-parameters are saved automatically by passing them to the Logger instance that records results (see Logger documentation)."""
+Hyper-parameters are saved automatically by passing them to the Logger instance that records a run's results (see Logger documentation)."""
 
 
 class Window(QtWidgets.QMainWindow):
@@ -86,7 +88,7 @@ class Window(QtWidgets.QMainWindow):
     dropdown = QtWidgets.QComboBox()
     dropdown.addItem('Single panel')
     dropdown.addItem('One per metric')
-    dropdown.addItem('One per experiment')
+    dropdown.addItem('One per run')
     dropdown.setCurrentText(self.settings.value('panel_dropdown', 'One per metric'))
     sidebar.addWidget(dropdown, 3, 1)
     self.panel_dropdown = dropdown

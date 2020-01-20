@@ -96,7 +96,7 @@ class Plots():
     if panel_option == "One per metric":
       panels = [(x_name, name) for name in exp.names]
 
-    elif panel_option == "One per experiment":
+    elif panel_option == "One per run":
       panels = [(None, exp.name)]  # add() expects a tuple, using 2nd element for plot title
     
     elif panel_option == "Single panel":
@@ -133,7 +133,7 @@ class Plots():
   def add(self, exp):
     """Creates or updates plots associated with given experiment, creating panels if needed.
     If the experiment is marked as invisible/filtered, nothing will be drawn."""
-    
+
     if not exp.visible or exp.is_filtered or len(exp.names) == 0:
       return False  # plots are invisible or no data loaded yet
 
