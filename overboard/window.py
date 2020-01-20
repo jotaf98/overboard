@@ -348,8 +348,9 @@ class Window(QtWidgets.QMainWindow):
     """Rebuild all plots (e.g. when plot options such as x/y axis change)"""
     self.plots.remove_all()
     for exp in self.experiments.exps.values():
-      self.plots.add(exp)
-      self.process_events_if_needed()  # keep it responsive
+      visible = self.plots.add(exp)
+      if visible:
+        self.process_events_if_needed()  # keep it responsive
 
   def set_table_cell(self, row, col, value, exp, selectable=True):
     # helper to set a single table cell in the sidebar.
@@ -394,6 +395,8 @@ class Window(QtWidgets.QMainWindow):
   def on_icon_click(self, icon, exp):
     """Toggle visibility of a given experiment, when the
     icon (first column of table) is clicked"""
+
+    if exp.is_filtered: return  # shouldn't happen    
     if exp.visible:
       # remove all associated plots
       exp.visible = False
@@ -436,21 +439,19 @@ class Window(QtWidgets.QMainWindow):
     if old_exp:
       old_exp.is_selected = False
       self.redraw_icon(old_icon, old_exp)
-      if old_exp.visible:  # update its view
-        self.plots.add(old_exp)
+      self.plots.add(old_exp)  # update its view, in case it's visible
 
-    if exp:
-      if exp.visible:  # don't select if invisible
-        icon = self.table.cellWidget(exp.table_row.row(), 0)
+    if exp and exp.visible:  # don't select if invisible
+      icon = self.table.cellWidget(exp.table_row.row(), 0)
 
-        exp.is_selected = True
-        self.plots.add(exp)
-        self.selected_exp = (exp, icon)
-        self.visualizations.select(exp)
-        self.redraw_icon(icon, exp)
+      exp.is_selected = True
+      self.plots.add(exp)
+      self.selected_exp = (exp, icon)
+      self.visualizations.select(exp)
+      self.redraw_icon(icon, exp)
 
-        if not clicked_table:  # update table selection
-          self.table.selectRow(exp.table_row.row())
+      if not clicked_table:  # update table selection
+        self.table.selectRow(exp.table_row.row())
     else:
       self.selected_exp = (None, None)
       self.visualizations.select(None)
@@ -490,9 +491,8 @@ class Window(QtWidgets.QMainWindow):
       # no filter, show experiment unconditionally
       if exp.is_filtered:
         self.table.setRowHidden(exp.table_row.row(), False)
-        if exp.visible:
-          self.plots.add(exp)
         exp.is_filtered = False
+        self.plots.add(exp)
     else:
       # create a dict with the hyper-parameters from this experiment, and all
       # missing hyper-parameters set to None, to be accessed by the filter function.
@@ -507,14 +507,15 @@ class Window(QtWidgets.QMainWindow):
         return True
 
       # hide or show depending on context
+      was_hidden = (exp.is_filtered or not exp.visible)
+      exp.is_filtered = hide  # will be checked by Plots.add
+
       self.table.setRowHidden(exp.table_row.row(), hide)
       if hide:
-        if not exp.is_filtered:
+        if not was_hidden:
           self.plots.remove(exp)
       else:
-        if exp.is_filtered and exp.visible:
-          self.plots.add(exp)
-      exp.is_filtered = hide
+        self.plots.add(exp)
       return False
 
   def show_filter_error(self, err):

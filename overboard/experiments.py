@@ -142,13 +142,11 @@ class Experiment():
   def on_data_ready(self, data):  
     assert(len(self.names) > 0)  # sanity check, on_header_ready should have been called before
 
-    # append new values to each existing column
+    # append new values to each existing column, and update plots
     for (column, new_values) in zip(self.data, data):
       column.extend(new_values)
 
-    # update plots
-    if self.visible and not self.is_filtered:
-      self.window.plots.add(self)
+    self.window.plots.add(self)
 
   def on_done(self):
     # mark experiment as done. this signal is also sent to the QThread's quit slot, so it ends.

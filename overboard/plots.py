@@ -131,9 +131,12 @@ class Plots():
     return info
 
   def add(self, exp):
-    """Creates or updates plots associated with given experiment, creating panels if needed"""
-    if len(exp.names) == 0:  # no data yet
-      return
+    """Creates or updates plots associated with given experiment, creating panels if needed.
+    If the experiment is marked as invisible/filtered, nothing will be drawn."""
+    
+    if not exp.visible or exp.is_filtered or len(exp.names) == 0:
+      return False  # plots are invisible or no data loaded yet
+
     plots = self.define_plots(exp)
     for plot in plots:
       # create new panel if it doesn't exist
@@ -209,6 +212,8 @@ class Plots():
         # use same color but semi-transparent
         c = pen.color()
         shade.setBrush((c.red(), c.green(), c.blue(), 64))
+
+    return len(plots) > 0  # True if some plots were actually drawn
 
   
   def add_plot_panel(self, plot):
@@ -416,7 +421,7 @@ class Plots():
           del self.panels[plot['panel']]
 
   def remove_all(self):
-    """Remove all plots"""
+    """Remove all plots, fast"""
     for panel in self.panels.values():
       panel.setParent(None)
       panel.deleteLater()
