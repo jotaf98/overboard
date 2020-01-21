@@ -12,6 +12,7 @@ from PyQt5.Qt import QPalette, QColor
 
 import os
 from time import time
+from datetime import datetime, timezone
 
 import pyqtgraph as pg
 
@@ -306,6 +307,7 @@ class Window(QtWidgets.QMainWindow):
 
   def on_exp_meta_ready(self, exp):
     """Called by Experiment when the meta-data has been read"""
+
     # print a row of meta-data (argument) values for this experiment in the table
     (table, table_args) = (self.table, self.table_args)
     added_columns = False
@@ -321,7 +323,15 @@ class Window(QtWidgets.QMainWindow):
         else:
           col = table_args[arg_name]
         
-        self.set_table_cell(exp.table_row.row(), col, exp.meta.get(arg_name, ''), exp)
+        cell_text = exp.meta.get(arg_name, '')
+        
+        # convert timestamp string to datetime object, for easy manipulation
+        # in filters later. only for python 3.7+
+        if arg_name == 'timestamp' and hasattr(datetime, 'fromisoformat'):
+          exp.meta[arg_name] = timestamp = datetime.fromisoformat(cell_text)
+          cell_text = print_datetime(timestamp)  # convert to friendly text
+
+        self.set_table_cell(exp.table_row.row(), col, cell_text, exp)
 
     if added_columns:
       self.resize_table()
@@ -331,7 +341,7 @@ class Window(QtWidgets.QMainWindow):
       for widget in [self.x_dropdown, self.y_dropdown, self.panel_dropdown, self.merge_dropdown]:
         if widget.findText(arg_name) < 0:
           widget.addItem(arg_name)
-          
+    
     # hide row if filter says so
     self.filter_experiment(exp)
 
@@ -355,7 +365,7 @@ class Window(QtWidgets.QMainWindow):
         self.process_events_if_needed()  # keep it responsive
 
   def set_table_cell(self, row, col, value, exp, selectable=True):
-    # helper to set a single table cell in the sidebar.
+    """Set a single table cell in the sidebar"""
     # try to interpret as integer or float, to allow numeric sorting of columns
     if not isinstance(value, int) and not isinstance(value, float):
       value = str(value)  # handle e.g. dicts
@@ -501,6 +511,11 @@ class Window(QtWidgets.QMainWindow):
       vars_table = dict(zip(self.table_args.keys(), [None] * len(self.table_args)))
       vars_table.update(exp.meta)
 
+      # other special variables that will be available to the filter function
+      vars_table['run'] = exp.name
+      vars_table['datetime'] = datetime  # useful to manipulate timestamps
+      vars_table['timezone'] = timezone
+
       # evaluate filter to obtain boolean
       try:
         hide = not eval(self.compiled_filter, vars_table, vars_table)
@@ -563,6 +578,7 @@ class Window(QtWidgets.QMainWindow):
     self.settings.sync()
     event.accept()
 
+
 def create_scroller():
   scroll_area = QtWidgets.QScrollArea()
   scroll_area.setWidgetResizable(True)
@@ -571,6 +587,15 @@ def create_scroller():
   scroll_widget.setMinimumWidth(50)
   scroll_area.setWidget(scroll_widget)
   return (scroll_widget, scroll_area)
+
+def print_datetime(dt):
+  """Prints a friendly string with a given datetime object"""
+  diff = dt - datetime.now(timezone.utc)  # difference from now (in UTC)
+  dt = dt.astimezone()  # convert from UTC to local time for display
+  if diff.days == 0: return f"{dt:%X}"  # time
+  if diff.days <= 7: return f"{dt:%a, %X}"  # weekday, time
+  if diff.years == 0: return f"{dt.day} {dt:%b, %X}"  # day month, time
+  return f"{dt.day} {dt:%b %Y, %X}"  # day month year, time
 
 
 def set_style(app):
