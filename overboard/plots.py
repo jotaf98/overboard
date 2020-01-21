@@ -100,7 +100,7 @@ class Plots():
       panels = [(None, exp.name)]  # add() expects a tuple, using 2nd element for plot title
     
     elif panel_option == "Single panel":
-      panels = [(None, y_name + ' by ' + x_name)]
+      panels = [(None, y_name)]
     
     else:  # single hyper-parameter selected, create one panel for each value
       panels = [(None, panel_option + ' = ' + str(exp.meta.get(panel_option, None)))]  # None if missing
@@ -124,10 +124,12 @@ class Plots():
         # a plot with the same values on X and Y is redundant, so skip it
         if x == y: continue
 
+        # label used for the X axis; only show if it's different from the default
+        x_label = (None if x_option == "First metric" else x)
+
         # final touches and compose dict
-        width = 2
         style = exp.name
-        info.append(dict(panel=panel, x=x, y=y, style=style, width=width, line_id=(x, y, line_id), merge_info=merge_info))
+        info.append(dict(panel=panel, x=x, y=y, style=style, x_label=x_label, line_id=(x, y, line_id), merge_info=merge_info))
     return info
 
   def add(self, exp):
@@ -232,6 +234,9 @@ class Plots():
     panel = self.window.add_panel(plot_widget, title)
 
     plot_item = panel.plot_widget.getPlotItem()
+
+    if plot['x_label'] is not None:  # set X axis label if needed
+      plot_item.setLabel('bottom', plot['x_label'])
 
     # mouse cursor (vertical line)
     panel.cursor_vline = pg.InfiniteLine(angle=90, pen="#B0B0B0")
