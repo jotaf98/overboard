@@ -147,7 +147,7 @@ class Plots():
       plot_item = panel.plot_widget.getPlotItem()
       
       # get data points, pre-processed to ensure they are numeric. this may edit the axes.
-      (xs, ys) = self.get_numeric_data_points(exp, plot)
+      (xs, ys) = self.get_numeric_data_points(exp, plot, plot_item)
 
       # allow overriding the style
       style = dict(exp.style)  # explicit copy since we'll change it
@@ -262,7 +262,7 @@ class Plots():
     panel.aux_plots_dict = {}
     self.panels[plot['panel']] = panel
 
-  def get_numeric_data_points(self, exp, plot):
+  def get_numeric_data_points(self, exp, plot, plot_item):
     """Retrieves the data points for a single plot, from its define_plots
     description. Reduction to scalar (single point) is applied if needed, and
     time/categorical data is converted to numeric coordinates. Used by Plots.add."""
