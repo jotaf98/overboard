@@ -179,7 +179,7 @@ class Plots():
 
       # handle merged plots, by updating the statistics to display first
       if plot['merge_info'] is not None:
-        (xs, ys, shade_size) = self.update_merged_stats(line, xs, ys, plot['merge_info'])
+        (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, xs, ys, plot['merge_info'])
 
       # args to assign to PlotDataItem line
       data = dict(x=xs, y=ys, pen=pen)
@@ -193,25 +193,33 @@ class Plots():
       # assign the data
       line.setData(**data)
 
-      # finish merged plots, by plotting the shaded part
+      # finish merged plots, by plotting the confidence intervals
       if plot['merge_info'] is not None:
-        if plot['line_id'] not in panel.aux_plots_dict:
-          # create for first time. we need 2 curves, setting the upper and lower
-          # limits, and then a FillBetweenItem to shade the space between them.
-          limit1 = plot_item.plot([], [])
-          limit2 = plot_item.plot([], [])
-          shade = pg.FillBetweenItem(limit1, limit2, (200, 0, 0, 128))
-          plot_item.addItem(shade)
-          panel.aux_plots_dict[plot['line_id']] = (limit1, limit2, shade)
+        if len(xs) > 1:
+          if plot['line_id'] not in panel.aux_plots_dict:
+            # create for first time. we need 2 curves, setting the upper and lower
+            # limits, and then a FillBetweenItem to shade the space between them.
+            limit1 = plot_item.plot([], [])
+            limit2 = plot_item.plot([], [])
+            shade = pg.FillBetweenItem(limit1, limit2, (200, 0, 0, 128))
+            plot_item.addItem(shade)
+            panel.aux_plots_dict[plot['line_id']] = (limit1, limit2, shade)
+          else:
+            (limit1, limit2, shade) = panel.aux_plots_dict[plot['line_id']]
+          limit1.setData(x=xs, y=shade_y1)
+          limit2.setData(x=xs, y=shade_y2)
+
+          c = pen.color()  # shade using same color but semi-transparent
+          shade.setBrush((c.red(), c.green(), c.blue(), 64))
         else:
-          (limit1, limit2, shade) = panel.aux_plots_dict[plot['line_id']]
-
-        limit1.setData(x=xs, y=ys-shade_size)
-        limit2.setData(x=xs, y=ys+shade_size)
-
-        # use same color but semi-transparent
-        c = pen.color()
-        shade.setBrush((c.red(), c.green(), c.blue(), 64))
+          # a single point, plot as an error bar
+          data = dict(x=xs, y=ys, bottom=ys-shade_y1, top=shade_y2-ys, pen=pen)
+          if plot['line_id'] not in panel.aux_plots_dict:
+            # create for first time
+            bar = panel.aux_plots_dict[plot['line_id']] = pg.ErrorBarItem(**data)
+            plot_item.addItem(bar)
+          else:
+            panel.aux_plots_dict[plot['line_id']].setData(**data)
 
     return len(plots) > 0  # True if some plots were actually drawn
 
@@ -371,9 +379,10 @@ class Plots():
     # compute statistics
     xs = np.nanmean(all_xs, axis=1, keepdims=False)
     ys = np.nanmean(all_ys, axis=1, keepdims=False)
-    shade_size = np.nanstd(all_ys, axis=1, keepdims=False)
+    std = np.nanstd(all_ys, axis=1, keepdims=False)
+    (shade_y1, shade_y2) = (ys - 2 * std, ys + 2 * std)
 
-    return (xs, ys, shade_size)
+    return (xs, ys, shade_y1, shade_y2)
 
   def remove(self, exp):
     """Removes all plots associated with an experiment (inverse of Plots.add)"""
