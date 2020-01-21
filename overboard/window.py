@@ -323,15 +323,14 @@ class Window(QtWidgets.QMainWindow):
         else:
           col = table_args[arg_name]
         
-        cell_text = exp.meta.get(arg_name, '')
+        cell_value = exp.meta.get(arg_name, '')
         
         # convert timestamp string to datetime object, for easy manipulation
         # in filters later. only for python 3.7+
         if arg_name == 'timestamp' and hasattr(datetime, 'fromisoformat'):
-          exp.meta[arg_name] = timestamp = datetime.fromisoformat(cell_text)
-          cell_text = print_datetime(timestamp)  # convert to friendly text
+          cell_value = exp.meta[arg_name] = datetime.fromisoformat(cell_value)
 
-        self.set_table_cell(exp.table_row.row(), col, cell_text, exp)
+        self.set_table_cell(exp.table_row.row(), col, cell_value, exp)
 
     if added_columns:
       self.resize_table()
@@ -367,7 +366,7 @@ class Window(QtWidgets.QMainWindow):
   def set_table_cell(self, row, col, value, exp, selectable=True):
     """Set a single table cell in the sidebar"""
     # try to interpret as integer or float, to allow numeric sorting of columns
-    if not isinstance(value, int) and not isinstance(value, float):
+    if not isinstance(value, (int, float, datetime)):
       value = str(value)  # handle e.g. dicts
       try:
         value = float(value)
@@ -377,6 +376,10 @@ class Window(QtWidgets.QMainWindow):
 
     if isinstance(value, str):  # faster option for strings
       item = QtWidgets.QTableWidgetItem(value)
+
+    elif isinstance(value, datetime):  # show nicer-looking timestamps, sorted correctly
+      item = SortableTableItem(print_datetime(value), value.timestamp)
+
     else:  # sort as number if not a string
       item = QtWidgets.QTableWidgetItem()
       item.setData(Qt.EditRole, QtCore.QVariant(value))
@@ -578,6 +581,16 @@ class Window(QtWidgets.QMainWindow):
     self.settings.sync()
     event.accept()
 
+
+class SortableTableItem(QtWidgets.QTableWidgetItem):
+  """Used to define custom sort order (stored as the 2nd UserRole data)
+  for table cells representing objects such as datetimes"""
+  def __init__(self, text, order):
+    super().__init__(text)
+    self.setData(Qt.UserRole + 1, order)
+
+  def __lt__(self, other):
+    return (self.data(QtCore.Qt.UserRole + 1)() < other.data(QtCore.Qt.UserRole + 1)())
 
 def create_scroller():
   scroll_area = QtWidgets.QScrollArea()
