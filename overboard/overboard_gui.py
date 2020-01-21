@@ -1,6 +1,5 @@
 
-import sys, argparse, glob, collections, logging
-from functools import partial
+import sys, argparse, logging
 
 #import os
 #os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "TRUE"

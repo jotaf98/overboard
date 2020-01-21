@@ -275,6 +275,9 @@ class Window(QtWidgets.QMainWindow):
 
   def redraw_icon(self, icon, exp):
     """Update an icon in the table by redrawing its pixmap with an experiment's style"""
+    if icon is None:  # allow omitting the icon widget for convenience
+      icon = self.table.cellWidget(exp.table_row.row(), 0)
+
     pixmap = icon.pixmap()
     pixmap.fill()  # white background by default
 

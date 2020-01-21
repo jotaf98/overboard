@@ -23,7 +23,7 @@ from .pg_time_axis import timestamp, DateAxisItem
 # define lists of styles to cycle
 palette = ["#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B3", "#937860", "#DA8BC3", "#8C8C8C", "#CCB974", "#64B5CD"]
 dashes = [QtCore.Qt.SolidLine, QtCore.Qt.DashLine, QtCore.Qt.DotLine, QtCore.Qt.DashDotLine, QtCore.Qt.DashDotDotLine]
-dashes_by_name = dict(zip(['-', '--', ':', '-.', '-..'], dashes))
+#dashes_by_name = dict(zip(['-', '--', ':', '-.', '-..'], dashes))
 widths = [2, 1, 3]  # line widths
 
 
@@ -149,23 +149,6 @@ class Plots():
       # get data points, pre-processed to ensure they are numeric. this may edit the axes.
       (xs, ys) = self.get_numeric_data_points(exp, plot, plot_item)
 
-      # allow overriding the style
-      style = dict(exp.style)  # explicit copy since we'll change it
-      if 'color' in plot:
-        style['color'] = plot['color']
-      if 'width' in plot:
-        style['width'] = plot['width']
-      if 'dash' in plot and plot['dash'] in dashes_by_name:
-        style['style'] = dashes_by_name[plot['dash']]
-      
-      if exp.is_selected:  # selected lines are thicker
-        style['width'] += 2
-        
-      try:
-        pen = pg.mkPen(style)
-      except:  # if the style is malformed, use the default style
-        pen = pg.mkPen(exp.style)
-      
       # check if plot line already exists
       if plot['line_id'] not in panel.plots_dict:
         # create new line
@@ -179,8 +162,19 @@ class Plots():
 
       # handle merged plots, by updating the statistics to display first
       if plot['merge_info'] is not None:
-        (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, xs, ys, plot['merge_info'])
+        (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, xs, ys, exp.style, plot['merge_info'])
 
+        # also, share the same style among a group of merged experiments
+        if hasattr(line, 'style') and exp.style != line.style:
+          exp.style = line.style
+          self.window.redraw_icon(None, exp)  # update the icon
+
+      # create pen with the experiment's style (line color, dashes and width)
+      pen = pg.mkPen(exp.style)
+
+      if exp.is_selected:  # selected lines are thicker
+        pen.setWidth(exp.style.get('width', 2) + 2)
+      
       # args to assign to PlotDataItem line
       data = dict(x=xs, y=ys, pen=pen)
 
@@ -188,14 +182,18 @@ class Plots():
       if len(xs) == 1:
         data['symbol'] = 'o'
         data['symbolBrush'] = pen.color()
-        data['symbolSize'] = style['width'] * 2 + 4
+        data['symbolSize'] = exp.style.get('width', 2) * 2 + 4
 
-      # assign the data
+      # assign the point coordinates and visual properties to the PlotDataItem
       line.setData(**data)
 
       # finish merged plots, by plotting the confidence intervals
       if plot['merge_info'] is not None:
         if len(xs) > 1:
+          # draw a shaded area. first, set the pen used to draw the outline of the shaded area
+          outline_pen = pg.mkPen(pen)
+          outline_pen.setWidthF(pen.widthF() / 3)
+          
           if plot['line_id'] not in panel.aux_plots_dict:
             # create for first time. we need 2 curves, setting the upper and lower
             # limits, and then a FillBetweenItem to shade the space between them.
@@ -206,8 +204,8 @@ class Plots():
             panel.aux_plots_dict[plot['line_id']] = (limit1, limit2, shade)
           else:
             (limit1, limit2, shade) = panel.aux_plots_dict[plot['line_id']]
-          limit1.setData(x=xs, y=shade_y1)
-          limit2.setData(x=xs, y=shade_y2)
+          limit1.setData(x=xs, y=shade_y1, pen=outline_pen)
+          limit2.setData(x=xs, y=shade_y2, pen=outline_pen)
 
           c = pen.color()  # shade using same color but semi-transparent
           shade.setBrush((c.red(), c.green(), c.blue(), 64))
@@ -351,25 +349,26 @@ class Plots():
     
     return (xs, ys)
 
-  def update_merged_stats(self, line, xs, ys, merge_info):
+  def update_merged_stats(self, line, xs, ys, style, merge_info):
     # update the unmerged data, stored in the line object
     if not hasattr(line, 'unmerged_xs'):
       line.unmerged_xs = {}
       line.unmerged_ys = {}
+      line.style = style
     
     if xs is not None:  # add it
       line.unmerged_xs[merge_info] = xs
     else:  # deleting this entry
       del line.unmerged_xs[merge_info]
       if len(line.unmerged_xs) == 0:  # nothing left
-        return (None, None, None)
+        return [None] * 4
 
     if ys is not None:
       line.unmerged_ys[merge_info] = ys
     else:
       del line.unmerged_ys[merge_info]
       if len(line.unmerged_xs) == 0:
-        return (None, None, None)
+        return [None] * 4
 
     # convert all data to numpy arrays, shape = (max number of points, number of repeats)
     # zip_longest is needed to fill in missing values with NaN, for incomplete lines.
@@ -401,11 +400,11 @@ class Plots():
 
           if plot['merge_info'] is not None:
             # remove this data from the merged line, and update it
-            (xs, ys, shade_size) = self.update_merged_stats(line, None, None, plot['merge_info'])
+            (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, None, None, None, plot['merge_info'])
             if xs is not None:
               (limit1, limit2, shade) = panel.aux_plots_dict[plot['line_id']]
-              limit1.setData(x=xs, y=ys-shade_size)
-              limit2.setData(x=xs, y=ys+shade_size)
+              limit1.setData(x=xs, y=shade_y1)
+              limit2.setData(x=xs, y=shade_y2)
             else:
               # removed final line, nothing left
               plot['merge_info'] = None
