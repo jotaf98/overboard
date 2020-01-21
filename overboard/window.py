@@ -67,48 +67,20 @@ class Window(QtWidgets.QMainWindow):
     self.size_slider = slider
     
     # dropdown lists for plot configuration
-    sidebar.addWidget(QtWidgets.QLabel('X axis'), 1, 0)
-    dropdown = QtWidgets.QComboBox()
-    dropdown.addItem('First metric')
-    dropdown.addItem('Panel metric')
-    dropdown.addItem('All metrics')
-    dropdown.setCurrentText(self.settings.value('x_dropdown', 'First metric'))
-    sidebar.addWidget(dropdown, 1, 1)
-    self.x_dropdown = dropdown
+    self.x_dropdown = self.create_dropdown(sidebar, label='X axis', default='First metric',
+      options=['First metric', 'Panel metric', 'All metrics'], setting_name='x_dropdown')
 
-    sidebar.addWidget(QtWidgets.QLabel('Y axis'), 2, 0)
-    dropdown = QtWidgets.QComboBox()
-    dropdown.addItem('First metric')
-    dropdown.addItem('Panel metric')
-    dropdown.addItem('All metrics')
-    dropdown.setCurrentText(self.settings.value('y_dropdown', 'Panel metric'))
-    sidebar.addWidget(dropdown, 2, 1)
-    self.y_dropdown = dropdown
+    self.y_dropdown = self.create_dropdown(sidebar, label='Y axis', default='Panel metric',
+      options=['First metric', 'Panel metric', 'All metrics'], setting_name='y_dropdown')
 
-    sidebar.addWidget(QtWidgets.QLabel('Panels'), 3, 0)
-    dropdown = QtWidgets.QComboBox()
-    dropdown.addItem('Single panel')
-    dropdown.addItem('One per metric')
-    dropdown.addItem('One per run')
-    dropdown.setCurrentText(self.settings.value('panel_dropdown', 'One per metric'))
-    sidebar.addWidget(dropdown, 3, 1)
-    self.panel_dropdown = dropdown
+    self.panel_dropdown = self.create_dropdown(sidebar, label='Panels', default='One per metric',
+      options=['Single panel', 'One per metric', 'One per run'], setting_name='panel_dropdown')
 
-    sidebar.addWidget(QtWidgets.QLabel('Scalar display'), 4, 0)
-    dropdown = QtWidgets.QComboBox()
-    dropdown.addItem('Last value')
-    dropdown.addItem('Maximum')
-    dropdown.addItem('Minumum')
-    dropdown.setCurrentText(self.settings.value('scalar_dropdown', 'Last value'))
-    sidebar.addWidget(dropdown, 4, 1)
-    self.scalar_dropdown = dropdown
+    self.scalar_dropdown = self.create_dropdown(sidebar, label='Scalar display', default='Last value',
+      options=['Last value', 'Maximum', 'Minimum'], setting_name='scalar_dropdown')
 
-    sidebar.addWidget(QtWidgets.QLabel('Merge'), 5, 0)
-    dropdown = QtWidgets.QComboBox()
-    dropdown.addItem('Nothing')
-    dropdown.setCurrentText(self.settings.value('merge_dropdown', 'Nothing'))
-    sidebar.addWidget(dropdown, 5, 1)
-    self.merge_dropdown = dropdown
+    self.merge_dropdown = self.create_dropdown(sidebar, label='Merge', default='Nothing',
+      options=['Nothing'], setting_name='merge_dropdown')
 
     # experiments filter text box
     sidebar.addWidget(QtWidgets.QLabel('Filter'), 6, 0)
@@ -235,6 +207,17 @@ class Window(QtWidgets.QMainWindow):
 
     return panel
   
+  def create_dropdown(self, sidebar, label, options, setting_name, default):
+    """Create a new dropdown menu, associated with a persistent setting"""
+    rows = sidebar.rowCount()
+    sidebar.addWidget(QtWidgets.QLabel(label), rows, 0)
+    dropdown = QtWidgets.QComboBox()
+    for option in options:
+      dropdown.addItem(option)
+    dropdown.setCurrentText(self.settings.value(setting_name, default))
+    sidebar.addWidget(dropdown, rows, 1)
+    return dropdown
+
 
   def on_exp_init(self, exp):
     """Called by Experiment when it is initialized"""
