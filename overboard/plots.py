@@ -67,6 +67,8 @@ class Plots():
     y_option = self.window.y_dropdown.currentText()
     panel_option = self.window.panel_dropdown.currentText()
     merge_option = self.window.merge_dropdown.currentText()
+    merge_type = (self.window.merge_line_dropdown.currentText(),
+      self.window.merge_shade_dropdown.currentText())
 
     # some combinations are invalid, change to sensible defaults in those cases
     if panel_option == "One per metric":
@@ -129,7 +131,8 @@ class Plots():
 
         # final touches and compose dict
         style = exp.name
-        info.append(dict(panel=panel, x=x, y=y, style=style, x_label=x_label, line_id=(x, y, line_id), merge_info=merge_info))
+        info.append(dict(panel=panel, x=x, y=y, style=style, x_label=x_label,
+          line_id=(x, y, line_id), merge_info=merge_info, merge_type=merge_type))
     return info
 
   def add(self, exp):
@@ -164,7 +167,7 @@ class Plots():
 
       # handle merged plots, by updating the statistics to display first
       if plot['merge_info'] is not None:
-        (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, xs, ys, exp.style, plot['merge_info'])
+        (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, plot['merge_info'], xs, ys, exp.style, plot['merge_type'])
 
         # also, share the same style among a group of merged experiments
         if hasattr(line, 'style') and exp.style != line.style:
@@ -354,7 +357,7 @@ class Plots():
     
     return (xs, ys)
 
-  def update_merged_stats(self, line, xs, ys, style, merge_info):
+  def update_merged_stats(self, line, merge_info, xs=None, ys=None, style=None, merge_type=None):
     # update the unmerged data, stored in the line object
     if not hasattr(line, 'unmerged_xs'):
       line.unmerged_xs = {}
@@ -381,10 +384,21 @@ class Plots():
     all_ys = np.array(list(zip_longest(*list(line.unmerged_ys.values()), fillvalue=np.nan)))
 
     # compute statistics
-    xs = np.nanmean(all_xs, axis=1, keepdims=False)
-    ys = np.nanmean(all_ys, axis=1, keepdims=False)
-    std = np.nanstd(all_ys, axis=1, keepdims=False)
-    (shade_y1, shade_y2) = (ys - 2 * std, ys + 2 * std)
+    if merge_type[0] == 'Median':
+      xs = np.nanmedian(all_xs, axis=1, keepdims=False)
+      ys = np.nanmedian(all_ys, axis=1, keepdims=False)
+    else:  # mean
+      xs = np.nanmean(all_xs, axis=1, keepdims=False)
+      ys = np.nanmean(all_ys, axis=1, keepdims=False)
+
+    if merge_type[1] == 'Maximum and minimum':
+      shade_y1 = np.nanmin(all_ys, axis=1, keepdims=False)
+      shade_y2 = np.nanmax(all_ys, axis=1, keepdims=False)
+    else:
+      # '2 x standard deviations', extract the integer factor in the first character and use it
+      factor = int(merge_type[1][0])
+      std = factor * np.nanstd(all_ys, axis=1, keepdims=False)
+      (shade_y1, shade_y2) = (ys - std, ys + std)
 
     return (xs, ys, shade_y1, shade_y2)
 
@@ -405,7 +419,7 @@ class Plots():
 
           if plot['merge_info'] is not None:
             # remove this data from the merged line, and update it
-            (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, None, None, None, plot['merge_info'])
+            (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, plot['merge_info'])
             if xs is not None:
               (limit1, limit2, shade) = panel.aux_plots_dict[plot['line_id']]
               limit1.setData(x=xs, y=shade_y1)

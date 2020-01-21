@@ -82,15 +82,23 @@ class Window(QtWidgets.QMainWindow):
     self.merge_dropdown = self.create_dropdown(sidebar, label='Merge', default='Nothing',
       options=['Nothing'], setting_name='merge_dropdown')
 
+    self.merge_line_dropdown = self.create_dropdown(sidebar, label='Merged line', default='Mean',
+      options=['Mean', 'Median'], setting_name='merge_line_dropdown')
+
+    self.merge_shade_dropdown = self.create_dropdown(sidebar, label='Merged shade', default='2 x standard deviations',
+      options=['1 x standard deviation', '2 x standard deviations', '3 x standard deviations',
+      'Maximum and minimum'], setting_name='merge_shade_dropdown')
+
     # experiments filter text box
-    sidebar.addWidget(QtWidgets.QLabel('Filter'), 6, 0)
+    rows = sidebar.rowCount()
+    sidebar.addWidget(QtWidgets.QLabel('Filter'), rows, 0)
     edit = QtWidgets.QLineEdit(self.settings.value('filter_edit', ''))
     edit.setPlaceholderText('Hover for help')
     edit.returnPressed.connect(self.on_filter_ready)
     edit.setToolTipDuration(60000)  # 1 minute
     edit.setToolTip(filter_tooltip_text)
     edit.focusInEvent = self.on_filter_focus
-    sidebar.addWidget(edit, 6, 1)
+    sidebar.addWidget(edit, rows, 1)
     self.filter_edit = edit
     self.compiled_filter = None  # compiled code of filter
 
@@ -173,7 +181,8 @@ class Window(QtWidgets.QMainWindow):
     self.resize(screen_size.width() * 0.6, screen_size.height() * 0.95)
     self.setWindowTitle('OverBoard - ' + args.folder)
 
-    for widget in [self.x_dropdown, self.y_dropdown, self.panel_dropdown, self.scalar_dropdown, self.merge_dropdown]:
+    for widget in [self.x_dropdown, self.y_dropdown, self.panel_dropdown, self.scalar_dropdown,
+     self.merge_dropdown, self.merge_line_dropdown, self.merge_shade_dropdown]:
       widget.activated.connect(self.rebuild_plots) 
 
     # compile loaded filter
@@ -557,6 +566,9 @@ class Window(QtWidgets.QMainWindow):
     self.settings.setValue('panel_dropdown', self.panel_dropdown.currentText())
     self.settings.setValue('scalar_dropdown', self.scalar_dropdown.currentText())
     self.settings.setValue('merge_dropdown', self.merge_dropdown.currentText())
+    self.settings.setValue('merge_line_dropdown', self.merge_line_dropdown.currentText())
+    self.settings.setValue('merge_shade_dropdown', self.merge_shade_dropdown.currentText())
+    
     self.settings.setValue('filter_edit', self.filter_edit.text())
 
     # save auto-complete model for filter, up to 50 entries
