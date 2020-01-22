@@ -4,13 +4,12 @@ import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
 import PyQt5.QtGui as QtGui
 from PyQt5.QtCore import Qt
-from PyQt5.Qt import QPalette, QColor
 
 # needed right after QT imports for high-DPI screens
 #QtWidgets.QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 #QtWidgets.QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
-import os
+import os, json
 from time import time
 from datetime import datetime, timezone
 
@@ -18,7 +17,7 @@ import pyqtgraph as pg
 
 from .flowlayout import FlowLayout
 from .fastslider import Slider
-from .plots import Smoother
+#from .plots import Smoother
 
 
 filter_tooltip_text = """Write a Python expression and then press Enter to filter.
@@ -28,6 +27,13 @@ Example: regularization >= 0.1 and batch_norm == True
 Runs (displayed as table rows) for which the expression evaluates to False will be hidden.
 Any hyper-parameters (displayed as table column headers) can be used in this expression.
 Hyper-parameters are saved automatically by passing them to the Logger instance that records a run's results (see Logger documentation)."""
+
+
+# constants referring to different data types stored in table cells.
+# e.g.: item.data(table_data_exp), with item a QTableWidgetItem
+table_data_exp = Qt.UserRole  # experiment name, identifies table row
+table_data_column = Qt.UserRole + 1  # column name
+table_data_order = Qt.UserRole + 2  # sorting order (for custom sorting, used for datetimes)
 
 
 class Window(QtWidgets.QMainWindow):
@@ -121,19 +127,25 @@ class Window(QtWidgets.QMainWindow):
     self.smoother = Smoother(args.smoothen)"""
 
     # experiments list in sidebar, as a table
-    table = QtWidgets.QTableWidget(0, 2)  # zero rows, two columns
-    table.setHorizontalHeaderLabels(['', 'run'])  # column headers
-    table.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
+    table = QtWidgets.QTableWidget(0, 4)  # start with zero rows
+    table.setHorizontalHeaderLabels(['', 'run', 'timestamp', 'notes'])  # initial column headers
+
+    self.table_col_by_name = {'timestamp': 2, 'notes': 3}  # maps column names (hyper-parameters) to column indices
+    table.sortItems(2, Qt.DescendingOrder)  # sort by timestamp column
 
     # table style
     table.setShowGrid(False)
     table.setAlternatingRowColors(True)
 
-    #table.setFocusPolicy(Qt.NoFocus)
     table.setSelectionBehavior(QtWidgets.QTableView.SelectRows)  # allow selecting rows
     table.setSelectionMode(QtWidgets.QTableView.SingleSelection)
     table.setAutoScroll(False)  # don't scroll when user clicks table cells
 
+    table.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)  # start editing cell with first click
+    table.itemChanged.connect(self.on_table_edit)
+    self.table_edit_enabled = True
+
+    table.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
     table.setHorizontalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)  # smooth scrolling
     table.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)
     
@@ -148,14 +160,6 @@ class Window(QtWidgets.QMainWindow):
 
     table.itemSelectionChanged.connect(self.on_table_select)
     table.mousePressEvent = self.on_table_click
-
-    self.table_args = {}  # maps argument names to column indices
-    
-    # create timestamp column in table (third) and sort by it
-    table.setColumnCount(3)
-    table.setHorizontalHeaderItem(2, QtWidgets.QTableWidgetItem('timestamp'))
-    table.sortItems(2, Qt.DescendingOrder)
-    self.table_args['timestamp'] = 2
 
     self.table = table
     self.selected_exp = (None, None)
@@ -232,9 +236,9 @@ class Window(QtWidgets.QMainWindow):
     """Called by Experiment when it is initialized"""
     # add experiment to table
     table = self.table
-    header = table.horizontalHeader()
 
     # disable sorting to prevent bug when adding items, to restore afterwards
+    header = table.horizontalHeader()
     prev_sort = (header.sortIndicatorSection(), header.sortIndicatorOrder())
     table.setSortingEnabled(False)
 
@@ -257,7 +261,7 @@ class Window(QtWidgets.QMainWindow):
     self.redraw_icon(icon, exp)
 
     # show experiment name
-    self.set_table_cell(row, 1, exp.name, exp)
+    self.set_table_cell(row, 1, exp.name, exp, 'run')
 
     # restore sorting, and sort state (which column and direction)
     table.setSortingEnabled(True)
@@ -304,31 +308,40 @@ class Window(QtWidgets.QMainWindow):
     """Called by Experiment when the meta-data has been read"""
 
     # print a row of meta-data (argument) values for this experiment in the table
-    (table, table_args) = (self.table, self.table_args)
+    (table, table_col_by_name) = (self.table, self.table_col_by_name)
+    row = exp.table_row.row()
     added_columns = False
+    self.table_edit_enabled = False  # avoid on_table_edit when filling in an editable cell for the first time
+
+    # disable sorting to prevent bug when adding items, to restore afterwards
+    header = table.horizontalHeader()
+    prev_sort = (header.sortIndicatorSection(), header.sortIndicatorOrder())
+    table.setSortingEnabled(False)
 
     for arg_name in exp.meta.keys():
       if not arg_name.startswith('_'):
-        if arg_name not in table_args:  # a new argument name, add a column
+        if arg_name not in table_col_by_name:  # a new argument name, add a column
           col = table.columnCount()
           table.setColumnCount(col + 1)
           table.setHorizontalHeaderItem(col, QtWidgets.QTableWidgetItem(arg_name))  #, QtWidgets.QTableWidgetItem.Type
-          table_args[arg_name] = col
+          table_col_by_name[arg_name] = col
           added_columns = True
         else:
-          col = table_args[arg_name]
+          col = table_col_by_name[arg_name]
         
         cell_value = exp.meta.get(arg_name, '')
         
-        # convert timestamp string to datetime object, for easy manipulation
-        # in filters later. only for python 3.7+
+        # convert timestamp string to datetime object, for nicer display. only for python 3.7+
         if arg_name == 'timestamp':
           try:
-            cell_value = exp.meta[arg_name] = datetime.fromisoformat(cell_value)
+            cell_value = datetime.fromisoformat(cell_value)
           except (ValueError, AttributeError):
             pass
 
-        self.set_table_cell(exp.table_row.row(), col, cell_value, exp)
+        self.set_table_cell(row, col, cell_value, exp, arg_name, editable=(arg_name == 'notes'))
+
+    if 'notes' not in exp.meta:  # explicitly create editable notes cell, if not created already
+      self.set_table_cell(row, table_col_by_name['notes'], '', exp, 'notes', editable=True)
 
     if added_columns:
       self.resize_table()
@@ -341,6 +354,12 @@ class Window(QtWidgets.QMainWindow):
     
     # hide row if filter says so
     self.filter_experiment(exp)
+
+    self.table_edit_enabled = True
+
+    # restore sorting, and sort state (which column and direction)
+    table.setSortingEnabled(True)
+    table.sortItems(*prev_sort)
 
     self.process_events_if_needed()
 
@@ -361,10 +380,10 @@ class Window(QtWidgets.QMainWindow):
       if visible:
         self.process_events_if_needed()  # keep it responsive
 
-  def set_table_cell(self, row, col, value, exp, selectable=True):
+  def set_table_cell(self, row, col, value, exp, col_name, selectable=True, editable=False):
     """Set a single table cell in the sidebar"""
-    # try to interpret as integer or float, to allow numeric sorting of columns
-    if not isinstance(value, (int, float, datetime)):
+    # try to interpret as integer or float, to allow numeric sorting of columns. editable is only for strings.
+    if not editable and not isinstance(value, (int, float, datetime)):
       value = str(value)  # handle e.g. dicts
       try:
         value = float(value)
@@ -382,12 +401,14 @@ class Window(QtWidgets.QMainWindow):
       item = QtWidgets.QTableWidgetItem()
       item.setData(Qt.EditRole, QtCore.QVariant(value))
 
-    item.setData(Qt.UserRole, exp.name)  # pointer to original experiment (by name)
+    item.setData(table_data_exp, exp.name)  # pointer to original experiment (by name), i.e. row name
+    item.setData(table_data_column, col_name)  # column name
 
-    flags = Qt.ItemIsEnabled  # set not editable
-    if selectable:
-      flags = flags | Qt.ItemIsSelectable
+    flags = Qt.ItemIsEnabled
+    if selectable: flags |= Qt.ItemIsSelectable
+    if editable: flags |= Qt.ItemIsEditable
     item.setFlags(flags)
+    
     self.table.setItem(row, col, item)
     return item
 
@@ -432,7 +453,7 @@ class Window(QtWidgets.QMainWindow):
     exp = None
     selected = self.table.selectedItems()
     if len(selected) > 0:  # select new one
-      exp = self.experiments.exps[selected[0].data(Qt.UserRole)]
+      exp = self.experiments.exps[selected[0].data(table_data_exp)]
     self.select_experiment(exp, clicked_table=True)
 
   def on_table_click(self, event):
@@ -470,6 +491,21 @@ class Window(QtWidgets.QMainWindow):
       self.visualizations.select(None)
       if not clicked_table:  # update table selection
         self.table.clearSelection()
+
+  def on_table_edit(self, item):
+    """Finished editing a cell in the table"""
+    if self.table_edit_enabled:
+      if item.data(table_data_column) == 'notes':
+        # update experiment meta-data with updated note, and update the JSON file
+        exp = self.experiments.exps[item.data(table_data_exp)]
+
+        if item.text() != exp.meta.get('notes', ''):  # user changed the text
+          # write to another file and only then replace the original (in case of crashes/bad writes)
+          exp.meta['notes'] = item.text()
+          with open(exp.directory + '/meta.json.partial', 'w') as file:
+            json.dump(exp.meta, file, sort_keys=True, indent=4)
+          os.replace(exp.directory + '/meta.json.partial', exp.directory + '/meta.json')
+          
 
   def on_filter_ready(self):
     """User pressed Enter in filter text box, filter the experiments"""
@@ -509,7 +545,7 @@ class Window(QtWidgets.QMainWindow):
     else:
       # create a dict with the hyper-parameters from this experiment, and all
       # missing hyper-parameters set to None, to be accessed by the filter function.
-      vars_table = dict(zip(self.table_args.keys(), [None] * len(self.table_args)))
+      vars_table = dict(zip(self.table_col_by_name.keys(), [None] * len(self.table_col_by_name)))
       vars_table.update(exp.meta)
 
       # other special variables that will be available to the filter function
@@ -584,14 +620,14 @@ class Window(QtWidgets.QMainWindow):
 
 
 class SortableTableItem(QtWidgets.QTableWidgetItem):
-  """Used to define custom sort order (stored as the 2nd UserRole data)
+  """Used to define custom sort order (stored as the 3rd UserRole data)
   for table cells representing objects such as datetimes"""
   def __init__(self, text, order):
     super().__init__(text)
-    self.setData(Qt.UserRole + 1, order)
+    self.setData(table_data_order, order)
 
   def __lt__(self, other):
-    return (self.data(QtCore.Qt.UserRole + 1)() < other.data(QtCore.Qt.UserRole + 1)())
+    return (self.data(table_data_order)() < other.data(table_data_order)())
 
 def create_scroller():
   scroll_area = QtWidgets.QScrollArea()
