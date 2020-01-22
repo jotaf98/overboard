@@ -640,11 +640,11 @@ def create_scroller():
 
 def print_datetime(dt):
   """Prints a friendly string with a given datetime object"""
-  diff = dt - datetime.now(timezone.utc)  # difference from now (in UTC)
+  now = datetime.now(timezone.utc)
   dt = dt.astimezone()  # convert from UTC to local time for display
-  if diff.days == 0: return f"{dt:%X}"  # time
-  if diff.days <= 7: return f"{dt:%a, %X}"  # weekday, time
-  if diff.years == 0: return f"{dt.day} {dt:%b, %X}"  # day month, time
+  if dt.day == now.day: return f"{dt:%X}"  # time
+  if (now - dt).days <= 7: return f"{dt:%a, %X}"  # weekday, time
+  if dt.year == now.year: return f"{dt.day} {dt:%b, %X}"  # day month, time
   return f"{dt.day} {dt:%b %Y, %X}"  # day month year, time
 
 
