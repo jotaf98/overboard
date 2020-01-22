@@ -322,8 +322,11 @@ class Window(QtWidgets.QMainWindow):
         
         # convert timestamp string to datetime object, for easy manipulation
         # in filters later. only for python 3.7+
-        if arg_name == 'timestamp' and hasattr(datetime, 'fromisoformat'):
-          cell_value = exp.meta[arg_name] = datetime.fromisoformat(cell_value)
+        if arg_name == 'timestamp':
+          try:
+            cell_value = exp.meta[arg_name] = datetime.fromisoformat(cell_value)
+          except (ValueError, AttributeError):
+            pass
 
         self.set_table_cell(exp.table_row.row(), col, cell_value, exp)
 
@@ -568,7 +571,7 @@ class Window(QtWidgets.QMainWindow):
     self.settings.setValue('merge_dropdown', self.merge_dropdown.currentText())
     self.settings.setValue('merge_line_dropdown', self.merge_line_dropdown.currentText())
     self.settings.setValue('merge_shade_dropdown', self.merge_shade_dropdown.currentText())
-    
+
     self.settings.setValue('filter_edit', self.filter_edit.text())
 
     # save auto-complete model for filter, up to 50 entries

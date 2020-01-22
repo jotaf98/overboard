@@ -264,7 +264,7 @@ class ExperimentReader(QObject):
           except ValueError:
             try:  # try interpreting as an ISO date
               value = datetime.fromisoformat(value)
-            except ValueError:
+            except (ValueError, AttributeError):
               pass  # otherwise, keep as a string
           row.append(value)
 
