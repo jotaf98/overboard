@@ -126,6 +126,10 @@ class Plots():
         # a plot with the same values on X and Y is redundant, so skip it
         if x == y: continue
 
+        # skip if this experiment does not have the required data
+        if x not in exp.meta and x not in exp.names: continue
+        if y not in exp.meta and y not in exp.names: continue
+
         # label used for the X axis; only show if it's different from the default
         x_label = (None if x_option == "First metric" else x)
 
