@@ -22,7 +22,7 @@ def get_timestamp(microseconds=True):
 class Logger:
   """Writes experiment data to a directory."""
 
-  def __init__(self, directory, stat_names=None, meta=None, save_timestamp=True, resume=False, timestamp_folder=True):
+  def __init__(self, directory, *, stat_names=None, meta=None, save_timestamp=True, resume=False, timestamp_folder=True):
     """Initialize log writer for a single experiment.
 
   directory: str
