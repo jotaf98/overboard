@@ -62,7 +62,7 @@ class Logger:
     else:
       self.directory = directory
 
-    if self.resume and not os.path.isfile(directory + '/stats.csv'):
+    if resume and not os.path.isfile(directory + '/stats.csv'):
       self.resume = False  # log file does not exist, just write from scratch
     else:
       self.resume = resume
