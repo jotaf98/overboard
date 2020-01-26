@@ -1,5 +1,5 @@
 
-import os, math, time, json, inspect, shutil, re
+import os, math, time, json, inspect, shutil, re, time, errno
 from datetime import datetime, timezone
 
 try:
@@ -14,25 +14,31 @@ except ImportError:
 
 def get_timestamp(microseconds=True):
   """Current timestamp in UTC timezone (no daylight savings, etc)"""
-  t = datetime.now(timezone.utc)
-  if not microseconds: t = t.replace(microsecond=0)
-  return str(t)
+  ts = datetime.now(timezone.utc)
+  if not microseconds: ts = ts.replace(microsecond=0)
+  return str(ts)
+
+def get_timestamp_folder(ts=None):
+  """Timestamp string with valid directory characters and no timezone"""
+  if ts is None: ts = get_timestamp()
+  return ts.replace('+00:00', '').replace(' ', '_').replace('.', '_').replace(':', '-')
 
 
 class Logger:
   """Writes experiment data to a directory."""
 
-  def __init__(self, directory, *, stat_names=None, meta=None, save_timestamp=True, resume=False, timestamp_folder=True):
+  def __init__(self, directory, *, meta=None, unique=True, resume=False, save_timestamp=True, stat_names=None):
     """Initialize log writer for a single experiment.
 
   directory: str
     Directory where the data will be stored. The main file that is written is "stats.csv", containing one column for each metric.
-
-  timestamp_folder: bool [True]
-    If true, a unique folder (using the current timestamp) will be created inside the given directory.
+    Note that if unique is True (the default), a unique subdirectory will be created here.
 
   meta: dict or argparse.Namespace [empty]
     Meta-data, which can consist of hyper-parameter names and values. Useful for sorting and inspecting experiments. A convenient method is to use the output of the argparse module, so any command-line options are stored as meta-data.
+
+  unique: bool [True]
+    If true, a unique folder (using the current timestamp) will be created inside the given directory.
 
   resume: bool [False]
     Appends new data to an existing log, to resume an experiment.
@@ -46,21 +52,21 @@ class Logger:
     if stat_names and not (all(isinstance(name, str) and not ',' in name for name in stat_names)):
       raise ValueError("stat_names must be a list of strings with no commas, if specified.")
 
-    if save_timestamp or timestamp_folder:
-      timestamp = get_timestamp()
-      
-    if timestamp_folder:
+    if save_timestamp or unique: timestamp = get_timestamp()
+    
+    if unique:
+      if resume: raise ValueError("Cannot create a unique directory and resume logging to it (`resume` and `unique` cannot both be True)")
+
       # transform timestamp into a valid folder name
-      folder_name = timestamp.replace('+00:00', '').replace(' ', '_').replace('.', '_').replace(':', '-')
-      directory += '/' + folder_name
-      if resume:
-        raise ValueError("Cannot resume logging to a new folder name (resume and unique_folder cannot both be True)")
+      self.directory = directory + '/' + get_timestamp_folder(timestamp)
+    else:
+      self.directory = directory
 
-    if resume and not os.path.isfile(self.directory + '/stats.csv'):
-      resume = False  # file does not exist, do not resume
+    if self.resume and not os.path.isfile(directory + '/stats.csv'):
+      self.resume = False  # log file does not exist, just write from scratch
+    else:
+      self.resume = resume
 
-    self.directory = directory
-    self.resume = resume
     self.wrote_header = False
     self.stat_names = None  # set later
 
@@ -85,10 +91,23 @@ class Logger:
 
     self.clock = -math.inf  # for rate_limit
 
-    # create directory if it doesn't exist, and (empty) visualizations file
-    os.makedirs(self.directory, exist_ok=True)
-    with open(self.directory + '/visualizations', 'w') as file:
-      pass
+    # create directory if it doesn't exist, and we're not resuming an existing log.
+    # note os.makedirs is an atomic operation of checking existence and creating the
+    # folder if needed, to avoid race conditions between different processes.
+    while not self.resume:
+      try:
+        os.makedirs(self.directory, exist_ok=False)
+        break  # success
+
+      except OSError as e:
+        if e.errno == errno.EEXIST and os.path.isdir(self.directory):
+          # errored because this exact timestamped folder already exists. this should
+          # be extremely rare due to the microseconds resolution, but still possible.
+          time.sleep(1e-5)  # try again in about 10 microseconds
+          timestamp = get_timestamp()
+          self.directory = directory + '/' + get_timestamp_folder(timestamp)
+        else:
+          raise  # some other error, re-raise it
 
     # get current timestamp as string, including timezone offset
     if save_timestamp:
