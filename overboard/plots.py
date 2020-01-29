@@ -95,32 +95,28 @@ class Plots():
     else:
       # x/y_option "Panel metric" is only compatible with panel_option "One per metric"
       if x_option == "Panel metric":
-        x_option = "First metric"
+        x_option = "iteration"
         self.window.x_dropdown.setCurrentText(x_option)
       if y_option == "Panel metric":
         y_option = "All metrics"
         self.window.y_dropdown.setCurrentText(y_option)
 
     if x_option == "All metrics" and y_option == "All metrics":
-      x_option = "First metric"
+      x_option = "iteration"
       self.window.x_dropdown.setCurrentText(x_option)
-
-    # get first metric for X or Y if requested
-    x_name = (exp.names[0] if x_option == "First metric" else x_option)
-    y_name = (exp.names[0] if y_option == "First metric" else y_option)
 
     # create list of panels by: metric, experiment, hyper-parameter type,
     # value of a single hyper-parameter, or create a single panel
     if panel_option == "One per metric":
-      panels = [(x_name, name) for name in exp.names]
+      panels = [(x_option, name) for name in exp.names]
 
     elif panel_option == "One per run":
       panels = [(None, exp.name)]  # add() expects a tuple, using 2nd element for plot title
     
     elif panel_option == "Single panel":
-      panels = [(None, y_name)]
+      panels = [(None, y_option)]
     
-    else:  # single hyper-parameter selected, create one panel for each value
+    else:  # single hyper-parameter selected, create different panels based on value
       panels = [(None, panel_option + ' = ' + str(exp.meta.get(panel_option, None)))]  # None if missing
 
     # possibly merge lines by some hyper-parameter; otherwise, each experiment is unique
@@ -129,11 +125,11 @@ class Plots():
 
     info = []  # the list of lines to plot
     for panel in panels:  # possibly spread plots across panels
-      lines = [(x_name, y_name)]  # single line per panel, with these X and Y sources
+      lines = [(x_option, y_option)]  # single line per panel, with these X and Y sources
       if x_option == "All metrics":  # several lines in a panel - one per metric
-        lines = [(name, y_name) for name in exp.names]
+        lines = [(name, y_option) for name in exp.names]
       elif y_option == "All metrics":
-        lines = [(x_name, name) for name in exp.names]
+        lines = [(x_option, name) for name in exp.names]
 
       for (x, y) in lines:  # possibly create multiple lines for this panel
         if x_option == "Panel metric": x = panel[1]  # different metrics per panel
@@ -146,12 +142,9 @@ class Plots():
         if x not in exp.meta and x not in exp.names: continue
         if y not in exp.meta and y not in exp.names: continue
 
-        # label used for the X axis; only show if it's different from the default
-        x_label = (None if x_option == "First metric" else x)
-
         # final touches and compose dict
         style = exp.name
-        info.append(dict(panel=panel, x=x, y=y, style=style, x_label=x_label,
+        info.append(dict(panel=panel, x=x, y=y, style=style, x_label=x,
           line_id=(x, y, line_id), merge_info=merge_info, merge_type=merge_type))
     return info
 
@@ -324,27 +317,15 @@ class Plots():
     assert len(xs) == len(ys)
 
     # check data points' types to know what axes to create (numeric, time or categorical)
-    x_is_time = all(isinstance(x, datetime) for x in xs)
-    y_is_time = all(isinstance(y, datetime) for y in ys)
-    x_is_numeric = len(xs) == 0 or all(isinstance(x, Number) and not isinstance(x, bool) for x in xs)
-    y_is_numeric = len(xs) == 0 or all(isinstance(y, Number) and not isinstance(y, bool) for y in ys)
-
-    # handle datetimes
-    if x_is_time:
-      # create time axes if needed, and convert datetimes to numeric values
+    if all(isinstance(x, datetime) for x in xs):
+      # handle datetimes. create time axes if needed, and convert datetimes to numeric values
       if not isinstance(plot_item.axes['bottom']['item'], DateAxisItem):
         axis = DateAxisItem(orientation='bottom')
         axis.attachToPlotItem(plot_item)
       xs = [timestamp(x) for x in xs]
 
-    if y_is_time:
-      if not isinstance(plot_item.axes['left']['item'], DateAxisItem):
-        axis = DateAxisItem(orientation='left')
-        axis.attachToPlotItem(plot_item)
-      ys = [timestamp(y) for y in ys]
-
-    # handle categorical values
-    if not x_is_numeric:
+    elif any(not isinstance(x, Number) or isinstance(x, bool) for x in xs):
+      # handle categorical values
       axes = plot_item.axes['bottom']['item']
       if axes._tickLevels is None:  # initialize
         axes.setTicks([[]])
@@ -362,7 +343,14 @@ class Plots():
 
       xs = [ticks_dict[x] for x in xs]  # convert to numeric value, by look-up
 
-    if not y_is_numeric:
+    # same as above, for Y axis
+    if all(isinstance(y, datetime) for y in ys):
+      if not isinstance(plot_item.axes['left']['item'], DateAxisItem):
+        axis = DateAxisItem(orientation='left')
+        axis.attachToPlotItem(plot_item)
+      ys = [timestamp(y) for y in ys]
+
+    elif any(not isinstance(y, Number) or isinstance(y, bool) for y in ys):
       axes = plot_item.axes['left']['item']
       if axes._tickLevels is None:  # initialize
         axes.setTicks([[]])

@@ -73,11 +73,11 @@ class Window(QtWidgets.QMainWindow):
     self.size_slider = slider
     
     # dropdown lists for plot configuration
-    self.x_dropdown = self.create_dropdown(sidebar, label='X axis', default='First metric',
-      options=['First metric', 'Panel metric', 'All metrics'], setting_name='x_dropdown')
+    self.x_dropdown = self.create_dropdown(sidebar, label='X axis', default='iteration',
+      options=['Panel metric', 'All metrics', 'iteration'], setting_name='x_dropdown')
 
     self.y_dropdown = self.create_dropdown(sidebar, label='Y axis', default='Panel metric',
-      options=['First metric', 'Panel metric', 'All metrics'], setting_name='y_dropdown')
+      options=['Panel metric', 'All metrics', 'iteration'], setting_name='y_dropdown')
 
     self.panel_dropdown = self.create_dropdown(sidebar, label='Panels', default='One per metric',
       options=['Single panel', 'One per metric', 'One per run'], setting_name='panel_dropdown')
@@ -381,8 +381,8 @@ class Window(QtWidgets.QMainWindow):
       self.plots.remove_all()
       for exp in self.experiments.exps.values():
         visible = self.plots.add(exp)
-      if visible:
-        self.process_events_if_needed()  # keep it responsive
+        if visible:
+          self.process_events_if_needed()  # keep it responsive
 
   def set_table_cell(self, row, col, value, exp, col_name, selectable=True, editable=False):
     """Set a single table cell in the sidebar"""
