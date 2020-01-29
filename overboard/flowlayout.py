@@ -19,6 +19,9 @@ class FlowLayout(QtWidgets.QLayout):
   def __del__(self):
     del self._items[:]
 
+  def clear(self):
+    self._items.clear()
+
   def addItem(self, item):
     self._items.append(item)
 

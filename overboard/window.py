@@ -377,9 +377,10 @@ class Window(QtWidgets.QMainWindow):
 
   def rebuild_plots(self):
     """Rebuild all plots (e.g. when plot options such as x/y axis change)"""
-    self.plots.remove_all()
-    for exp in self.experiments.exps.values():
-      visible = self.plots.add(exp)
+    if not self.plots.changing_plots:  # cancel when already rebuilding the plots (i.e. called recursively)
+      self.plots.remove_all()
+      for exp in self.experiments.exps.values():
+        visible = self.plots.add(exp)
       if visible:
         self.process_events_if_needed()  # keep it responsive
 

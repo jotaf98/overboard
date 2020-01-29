@@ -36,6 +36,7 @@ class Plots():
     self.hovered_line_id = None
     self.unused_styles = []  # reuse styles from hidden experiments. this is a heap so early styles have priority.
     self.next_style_index = 0
+    self.changing_plots = False
 
     pg.setConfigOptions(antialias=True, background='w', foreground='k')  # black on white
 
@@ -57,6 +58,21 @@ class Plots():
   def drop_style(self, style_order, style):
     # return a style to the set of available ones
     heapq.heappush(self.unused_styles, (style_order, style))
+
+  def set_changing_plots(self, is_changing):
+    """Marks the start or end of changes to the plots (e.g. Plots.add). This prevents
+    recursion when drawing causes GUI changes (e.g. invalid option combinations
+    that depend on data), and temporarily disables auto-scaling for performance."""
+    if self.changing_plots != is_changing:
+      for panel in self.panels.values():  # enable/disable auto-range on all plot items
+        plot_item = panel.plot_widget.getPlotItem()
+        if is_changing:
+          plot_item.disableAutoRange()
+        else:
+          plot_item.autoRange()
+
+    self.changing_plots = is_changing
+
 
   def define_plots(self, exp):
     """Defines plot information for a given experiment. Returns a list of dicts,
@@ -146,6 +162,8 @@ class Plots():
     if not exp.visible or exp.is_filtered or len(exp.names) == 0:
       return False  # plots are invisible or no data loaded yet
 
+    self.set_changing_plots(True)
+
     plots = self.define_plots(exp)
     for plot in plots:
       # create new panel if it doesn't exist
@@ -227,6 +245,8 @@ class Plots():
             plot_item.addItem(bar)
           else:
             panel.aux_plots_dict[plot['line_id']].setData(**data)
+
+    self.set_changing_plots(False)
 
     return len(plots) > 0  # True if some plots were actually drawn
 
@@ -410,6 +430,9 @@ class Plots():
     """Removes all plots associated with an experiment (inverse of Plots.add)"""
     if len(exp.names) == 0:  # no data yet
       return
+
+    self.set_changing_plots(True)
+    
     plots = self.define_plots(exp)
     for plot in plots:
       # find panel
@@ -451,11 +474,14 @@ class Plots():
           panel.deleteLater()
           del self.panels[plot['panel']]
 
+    self.set_changing_plots(False)
+
   def remove_all(self):
     """Remove all plots, fast"""
-    for panel in self.panels.values():
-      panel.setParent(None)
-      panel.deleteLater()
+    #for panel in self.panels.values():
+    #  panel.setParent(None)
+    #  panel.deleteLater()
+    self.window.flow_layout.clear()
     self.panels.clear()
 
 
