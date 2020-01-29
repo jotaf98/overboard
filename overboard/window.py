@@ -166,8 +166,11 @@ class Window(QtWidgets.QMainWindow):
     sidebar.addWidget(table, sidebar.rowCount(), 0, 1, 2)
     
     # create the scroll area with plots
-    (plot_scroll_widget, plot_scroll_area) = create_scroller()
-    main.addWidget(plot_scroll_area)
+    (plot_scroll_widget, self.scroll_area) = create_scroller()
+    main.addWidget(self.scroll_area)
+
+    # override wheel event to prevent a bug
+    self.scroll_area.wheelEvent = self.scroll_wheel_event
 
     # finish the parent: let sidebar width remain fixed when resizing the window, while
     # the plot area can vary; and set initial sidebar size.
@@ -597,6 +600,14 @@ class Window(QtWidgets.QMainWindow):
   #def smooth_slider_changed(self):
   #  self.smoother = Smoother(self.smooth_slider.value() / 4.0)
 
+  def scroll_wheel_event(self, event):
+    """Override QScrollArea wheelEvent, to prevent it from scrolling simultaneously with PyQtGraph's PlotItem"""
+    for panel in self.plots.panels.values():
+      if panel.plot_widget.underMouse():  # panel is under the mouse, so don't let QScrolArea scroll too
+        event.ignore()
+        return
+    QtWidgets.QScrollArea.wheelEvent(self.scroll_area, event)
+  
   def closeEvent(self, event):
     """Write state to settings before closing"""
     self.settings.setValue('panel_size', self.size_slider.value())
