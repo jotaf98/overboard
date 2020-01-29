@@ -13,6 +13,7 @@ import heapq, logging
 from datetime import datetime
 from numbers import Number
 from itertools import zip_longest
+from random import random
 import numpy as np
 
 import pyqtgraph as pg
@@ -167,7 +168,7 @@ class Plots():
       plot_item = panel.plot_widget.getPlotItem()
       
       # get data points, pre-processed to ensure they are numeric. this may edit the axes.
-      (xs, ys) = self.get_numeric_data_points(exp, plot, plot_item)
+      (xs, ys, x_is_categ, y_is_categ) = self.get_numeric_data_points(exp, plot, plot_item)
 
       # check if plot line already exists
       if plot['line_id'] not in panel.plots_dict:
@@ -202,7 +203,17 @@ class Plots():
       if len(xs) == 1:
         data['symbol'] = 'o'
         data['symbolBrush'] = pen.color()
-        data['symbolSize'] = exp.style.get('width', 2) * 2 + 4
+        data['symbolSize'] = pen.width() * 2 + 4
+        
+        # for categorical axis, jitter single points. unfortunately, points will
+        # jump around when selecting/deselecting plots, so we need to keep the
+        # amount of jitter in a state variable per line.
+        if x_is_categ:
+          if not hasattr(line, 'jitter_x'): line.jitter_x = random() * 0.2 - 0.1
+          xs[0] += line.jitter_x
+        if y_is_categ:
+          if not hasattr(line, 'jitter_y'): line.jitter_y = random() * 0.2 - 0.1
+          ys[0] += line.jitter_y
 
       # assign the point coordinates and visual properties to the PlotDataItem
       line.setData(**data)
@@ -289,6 +300,7 @@ class Plots():
     """Retrieves the data points for a single plot, from its define_plots
     description. Reduction to scalar (single point) is applied if needed, and
     time/categorical data is converted to numeric coordinates. Used by Plots.add."""
+    (x_is_categ, y_is_categ) = (False, False)  # whether an axis is categorical
 
     if plot['x'] in exp.meta:
       xs = [exp.meta[plot['x']]]  # a single point, with the chosen hyper-parameter
@@ -316,16 +328,18 @@ class Plots():
 
     assert len(xs) == len(ys)
 
-    # check data points' types to know what axes to create (numeric, time or categorical)
+
+    # check data points' types to know what axes to create (numeric, time or categorical).
+    # handle datetimes. create time axes if needed, and convert datetimes to numeric values
     if all(isinstance(x, datetime) for x in xs):
-      # handle datetimes. create time axes if needed, and convert datetimes to numeric values
       if not isinstance(plot_item.axes['bottom']['item'], DateAxisItem):
         axis = DateAxisItem(orientation='bottom')
         axis.attachToPlotItem(plot_item)
       xs = [timestamp(x) for x in xs]
 
-    elif any(not isinstance(x, Number) or isinstance(x, bool) for x in xs):
-      # handle categorical values
+    # handle categorical values
+    elif len(xs) > 0 and (self.window.x_categorical_checkbox.isChecked() or
+     any(not isinstance(x, Number) or isinstance(x, bool) for x in xs)):
       axes = plot_item.axes['bottom']['item']
       if axes._tickLevels is None:  # initialize
         axes.setTicks([[]])
@@ -341,16 +355,23 @@ class Plots():
           axes._tickLevels[0].append((axes.next_tick, x))
           axes.next_tick += 1
 
-      xs = [ticks_dict[x] for x in xs]  # convert to numeric value, by look-up
+      # convert to numeric value, by look-up
+      xs = [ticks_dict[x] for x in xs]
+      x_is_categ = True
 
-    # same as above, for Y axis
+
+    # same as above, for Y axis.
+    # handle datetimes. create time axes if needed, and convert datetimes to numeric values
     if all(isinstance(y, datetime) for y in ys):
       if not isinstance(plot_item.axes['left']['item'], DateAxisItem):
         axis = DateAxisItem(orientation='left')
         axis.attachToPlotItem(plot_item)
       ys = [timestamp(y) for y in ys]
 
-    elif any(not isinstance(y, Number) or isinstance(y, bool) for y in ys):
+    # handle categorical values
+    elif len(ys) > 0 and (self.window.y_categorical_checkbox.isChecked() or
+     any(not isinstance(y, Number) or isinstance(y, bool) for y in ys)):
+
       axes = plot_item.axes['left']['item']
       if axes._tickLevels is None:  # initialize
         axes.setTicks([[]])
@@ -365,9 +386,11 @@ class Plots():
           axes._tickLevels[0].append((axes.next_tick, y))
           axes.next_tick += 1
           
-      ys = [ticks_dict[y] for y in ys]  # convert to numeric value, by look-up
+      # convert to numeric value, by look-up
+      ys = [ticks_dict[y] for y in ys]
+      x_is_categ = True
     
-    return (xs, ys)
+    return (xs, ys, x_is_categ, y_is_categ)
 
   def update_merged_stats(self, line, merge_info, xs=None, ys=None, style=None, merge_type=None):
     # update the unmerged data, stored in the line object
@@ -475,8 +498,9 @@ class Plots():
 
   def on_mouse_move(self, event, panel):
     """Select curves when hovering them, and update mouse cursor text"""
-    viewbox = panel.plot_widget.getPlotItem().vb
-    point = viewbox.mapSceneToView(event.pos())
+    # access PlotItem's ViewBox to map mouse to data coordinates
+    plot_item = panel.plot_widget.getPlotItem()
+    point = plot_item.vb.mapSceneToView(event.pos())
     
     hovered = None
     hovered_id = (None, None, None)
@@ -518,13 +542,32 @@ class Plots():
       # snap dot to nearest point too
       panel.cursor_dot.setVisible(True)
       panel.cursor_dot.setData([x], [y])
+      vline_x = x
 
-      # print floats with 3 significant digits and no sci notation
-      # (e.g. 1e-4). also consider integers.
-      if x % 1 == 0: x = str(int(x))
-      else: x = float('%.3g' % x)
-      if y % 1 == 0: y = str(int(y))
-      else: y = float('%.3g' % y)
+      # show X value as string for categorical axes
+      axes = plot_item.axes['bottom']['item']
+      if hasattr(axes, 'ticks_dict'):  # X axis is categorical
+        index = round(x)  # round due to possible jittering
+        # awkward indexing into axes.ticks_dict by value (index/x value) instead of key (text label)
+        labels = [label for (label, idx) in axes.ticks_dict.items() if idx == index]
+        if len(labels) > 0: x = labels[0]
+      else:
+        # numeric value. print floats with 3 significant digits and no
+        # sci notation (e.g. 1e-4). also consider integers.
+        if x % 1 == 0: x = str(int(x))
+        else: x = float('%.3g' % x)
+
+      # show Y value as string for categorical axes
+      axes = plot_item.axes['left']['item']
+      if hasattr(axes, 'ticks_dict'):  # X axis is categorical
+        index = round(y)  # round due to possible jittering
+        # awkward indexing into axes.ticks_dict by value (index/x value) instead of key (text label)
+        labels = [label for (label, idx) in axes.ticks_dict.items() if idx == index]
+        if len(labels) > 0: y = labels[0]
+      else:
+        # numeric value, same as above
+        if y % 1 == 0: y = str(int(y))
+        else: y = float('%.3g' % y)
       
       # show data coordinates and line info
       (x_name, y_name, exp_name) = hovered_id[:3]
@@ -533,10 +576,11 @@ class Plots():
     else:
       panel.cursor_dot.setVisible(False)
       text = ""
+      vline_x = x
 
     # set positions and text
     panel.cursor_label.setText(text)  #, size='10pt'
-    panel.cursor_vline.setValue(x)
+    panel.cursor_vline.setValue(vline_x)
 
     self.hovered_line_id = hovered_id
 

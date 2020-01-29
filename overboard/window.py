@@ -76,8 +76,14 @@ class Window(QtWidgets.QMainWindow):
     self.x_dropdown = self.create_dropdown(sidebar, label='X axis', default='iteration',
       options=['Panel metric', 'All metrics', 'iteration'], setting_name='x_dropdown')
 
+    self.x_categorical_checkbox = self.create_checkbox(sidebar,
+      label='Treat X as categorical', default=False, setting_name='x_categorical_checkbox')
+
     self.y_dropdown = self.create_dropdown(sidebar, label='Y axis', default='Panel metric',
       options=['Panel metric', 'All metrics', 'iteration'], setting_name='y_dropdown')
+
+    self.y_categorical_checkbox = self.create_checkbox(sidebar,
+      label='Treat Y as categorical', default=False, setting_name='y_categorical_checkbox')
 
     self.panel_dropdown = self.create_dropdown(sidebar, label='Panels', default='One per metric',
       options=['Single panel', 'One per metric', 'One per run'], setting_name='panel_dropdown')
@@ -188,10 +194,6 @@ class Window(QtWidgets.QMainWindow):
     self.resize(screen_size.width() * 0.6, screen_size.height() * 0.95)
     self.setWindowTitle('OverBoard - ' + args.folder)
 
-    for widget in [self.x_dropdown, self.y_dropdown, self.panel_dropdown, self.scalar_dropdown,
-     self.merge_dropdown, self.merge_line_dropdown, self.merge_shade_dropdown]:
-      widget.activated.connect(self.rebuild_plots) 
-
     # compile loaded filter
     self.on_filter_ready()
 
@@ -230,9 +232,19 @@ class Window(QtWidgets.QMainWindow):
     dropdown = QtWidgets.QComboBox()
     for option in options:
       dropdown.addItem(option)
-    dropdown.setCurrentText(self.settings.value(setting_name, default))
+    dropdown.setCurrentText(self.settings.value(setting_name, default, type=str))
+    dropdown.activated.connect(self.rebuild_plots)
     sidebar.addWidget(dropdown, rows, 1)
     return dropdown
+
+  def create_checkbox(self, sidebar, label, setting_name, default):
+    """Create a new checkbox, associated with a persistent setting"""
+    rows = sidebar.rowCount()
+    checkbox = QtWidgets.QCheckBox(label)
+    checkbox.setChecked(self.settings.value(setting_name, default, type=bool))
+    checkbox.toggled.connect(self.rebuild_plots)
+    sidebar.addWidget(checkbox, rows, 0, 1, 2)
+    return checkbox
 
 
   def on_exp_init(self, exp):
@@ -334,13 +346,6 @@ class Window(QtWidgets.QMainWindow):
         
         cell_value = exp.meta.get(arg_name, '')
         
-        # convert timestamp string to datetime object, for nicer display. only for python 3.7+
-        if arg_name == 'timestamp':
-          try:
-            cell_value = datetime.fromisoformat(cell_value)
-          except (ValueError, AttributeError):
-            pass
-
         self.set_table_cell(row, col, cell_value, exp, arg_name, editable=(arg_name == 'notes'))
 
     if 'notes' not in exp.meta:  # explicitly create editable notes cell, if not created already
@@ -613,7 +618,9 @@ class Window(QtWidgets.QMainWindow):
     """Write state to settings before closing"""
     self.settings.setValue('panel_size', self.size_slider.value())
     self.settings.setValue('x_dropdown', self.x_dropdown.currentText())
+    self.settings.setValue('x_categorical_checkbox', self.x_categorical_checkbox.isChecked())
     self.settings.setValue('y_dropdown', self.y_dropdown.currentText())
+    self.settings.setValue('y_categorical_checkbox', self.y_categorical_checkbox.isChecked())
     self.settings.setValue('panel_dropdown', self.panel_dropdown.currentText())
     self.settings.setValue('scalar_dropdown', self.scalar_dropdown.currentText())
     self.settings.setValue('merge_dropdown', self.merge_dropdown.currentText())
