@@ -32,11 +32,14 @@ def main():
   parser.add_argument("--debug", action='store_true', default=False, help="Does not suppress exceptions during operation, useful for debugging.")
   args = parser.parse_args()
 
-  # create an exception hook, to avoid GUI exiting on uncaught exceptions
+  # create exception and warning hooks, to avoid GUI exiting on uncaught exceptions and suppress warnings
   if not args.debug:
     def trap_exceptions(err_type, err_value, traceback):
       logging.exception('Uncaught exception ' + str(err_type), exc_info=err_value)
+    def ignore_qt_warnings(msg_type, msg_log_context, msg_string):
+      pass
     sys.excepthook = trap_exceptions
+    QtCore.qInstallMessageHandler(ignore_qt_warnings)
   
   # create Qt application
   app = QtWidgets.QApplication(sys.argv)
