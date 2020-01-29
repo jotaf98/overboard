@@ -179,9 +179,20 @@ class ExperimentReader(QObject):
     # read JSON file with metadata (including timestamp), if it exists
     try:
       with open(self.directory + '/meta.json', 'r') as file:
-        self.meta_ready.emit(json.load(file))
+        meta = json.load(file)
     except IOError:  # no meta data, not critical
       self.meta_ready.emit({})
+
+    # try interpreting string values in meta-data as an ISO date
+    for (key, value) in meta.items():
+      if isinstance(value, str):
+        try:  # try interpreting as an ISO date
+          meta[key] = datetime.fromisoformat(value)
+        except (ValueError, AttributeError):
+          pass  # otherwise, keep as a string
+
+    # send the meta-data to the main thread
+    self.meta_ready.emit(meta)
 
     # read data
     try:
