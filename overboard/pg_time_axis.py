@@ -33,16 +33,18 @@ This module provides date-time aware axis
 """
 
 import numpy
-from pyqtgraph import AxisItem
+#from pyqtgraph import AxisItem
 from datetime import datetime, timedelta
 from time import mktime
+
+from .plotwidget import FancyAxis
 
 def timestamp(t=None):
     """Convert datetime object to UNIX timestamp (float)"""
     if t is None: t = datetime.now()
     return float(mktime(t.timetuple()))
 
-class DateAxisItem(AxisItem):
+class DateAxisItem(FancyAxis):  # FancyAxis inherits from pyqtgraph.AxisItem
     """
     A tool that provides a date-time aware axis. It is implemented as an
     AxisItem that interpretes positions as unix timestamps (i.e. seconds
@@ -57,7 +59,7 @@ class DateAxisItem(AxisItem):
     _pxLabelWidth = 80
 
     def __init__(self, *args, **kwargs):
-        AxisItem.__init__(self, *args, **kwargs)
+        super(DateAxisItem, self).__init__(*args, **kwargs)
         self._oldAxis = None
 
     def tickValues(self, minVal, maxVal, size):
@@ -132,7 +134,7 @@ class DateAxisItem(AxisItem):
             majticks = range(int(minVal), int(maxVal))
 
         else:  # <2s , use standard implementation from parent
-            return AxisItem.tickValues(self, minVal, maxVal, size)
+            return FancyAxis.tickValues(self, minVal, maxVal, size)
 
         L = len(majticks)
         if L > maxMajSteps:
@@ -191,6 +193,8 @@ class DateAxisItem(AxisItem):
         pos = plotItem.axes[self.orientation]['pos']
         plotItem.layout.addItem(self, *pos)
         self.setZValue(-1000)
+
+        self.setFlag(self.ItemNegativeZStacksBehindParent)
 
     def detachFromPlotItem(self):
         """Remove this axis from its attached PlotItem

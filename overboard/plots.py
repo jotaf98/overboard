@@ -139,6 +139,12 @@ class Plots():
         # a plot with the same values on X and Y is redundant, so skip it
         if x == y: continue
 
+        # special option: time aligned to the same origin
+        if x == 'time (relative)': (x, x_relative) = ('time', True)
+        else: x_relative = False
+        if y == 'time (relative)': (y, y_relative) = ('time', True)
+        else: y_relative = False
+
         # skip if this experiment does not have the required data
         if x not in exp.meta and x not in exp.metrics: continue
         if y not in exp.meta and y not in exp.metrics: continue
@@ -146,7 +152,8 @@ class Plots():
         # final touches and compose dict
         style = exp.name
         info.append(dict(panel=panel, x=x, y=y, style=style, x_label=x,
-          line_id=(x, y, line_id), merge_info=merge_info, merge_type=merge_type))
+          line_id=(x, y, line_id), merge_info=merge_info, merge_type=merge_type,
+          x_relative=x_relative, y_relative=y_relative))
     return info
 
   def add(self, exp):
@@ -343,6 +350,14 @@ class Plots():
       if not isinstance(plot_item.axes['bottom']['item'], DateAxisItem):
         axis = DateAxisItem(orientation='bottom')
         axis.attachToPlotItem(plot_item)
+        axis.setGrid(1)
+
+      # plot values relative to the same origin (i.e. remove minimum)
+      if plot['x_relative']:
+        earliest = min(xs)
+        origin = datetime(year=2000, month=1, day=1)
+        xs = [x - earliest + origin for x in xs]
+
       xs = [timestamp(x) for x in xs]
 
     # handle categorical values
@@ -372,8 +387,16 @@ class Plots():
     # handle datetimes. create time axes if needed, and convert datetimes to numeric values
     if all(isinstance(y, datetime) for y in ys):
       if not isinstance(plot_item.axes['left']['item'], DateAxisItem):
-        axis = DateAxisItem(orientation='left')
+        axis = DateAxisItem(orientation='left', backgroundColor=None)
         axis.attachToPlotItem(plot_item)
+        axis.setGrid(1)
+
+      # plot values relative to the same origin (i.e. remove minimum)
+      if plot['y_relative']:
+        earliest = min(ys)
+        origin = datetime(year=2000, month=1, day=1)
+        ys = [y - earliest + origin for y in ys]
+
       ys = [timestamp(y) for y in ys]
 
     # handle categorical values
@@ -497,9 +520,9 @@ class Plots():
 
   def remove_all(self):
     """Remove all plots, fast"""
-    #for panel in self.panels.values():
-    #  panel.setParent(None)
-    #  panel.deleteLater()
+    for panel in self.panels.values():
+      panel.setParent(None)
+      panel.deleteLater()
     self.window.flow_layout.clear()
     self.panels.clear()
 

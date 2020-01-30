@@ -11,24 +11,34 @@ import pyqtgraph as pg
 
 
 class FancyAxis(pg.AxisItem):
+  """PyQtGraph AxisItem that allows tick colors different from the grid color,
+  a grid background color, and no axis lines. Default aspect is inspired by Seaborn.
+  Note that only one axis should draw the background (the other's backgroundColor should be None)"""
   def __init__(self, *args, first=True, backgroundColor="#EAEAF2", tickColor="white", tickWidth=2, **kwargs):
     super(FancyAxis, self).__init__(*args, **kwargs)
     self.backgroundColor = backgroundColor
     self.tickColor = tickColor
     self.tickWidth = tickWidth
+    self.z_is_set = False
+  
 
   def drawPicture(self, p, axisSpec, tickSpecs, textSpecs):
+    # if this axis is responsible for drawing the background, ensure
+    # that the Z value is such that this does not occlude other axes
+    if self.backgroundColor and not self.z_is_set:
+      self.setZValue(self.zValue() - 1)
+      self.z_is_set = True
+    
     p.setRenderHint(p.Antialiasing, False)
     p.setRenderHint(p.TextAntialiasing, True)
-    
+
     # draw background rect
     if self.backgroundColor:
+      #bounds = self.mapRectFromParent(self.geometry())
       linkedView = self.linkedView()
-      if linkedView is None or self.grid is False:
-        rect = bounds
-      else:
-        rect = linkedView.mapRectToItem(self, linkedView.boundingRect())
-      p.fillRect(rect, QtGui.QColor(self.backgroundColor))
+      if linkedView is not None and self.grid is not False:
+        bounds = linkedView.mapRectToItem(self, linkedView.boundingRect())
+        p.fillRect(bounds, QtGui.QColor(self.backgroundColor))
 
     # draw ticks/grid
     for pen, p1, p2 in tickSpecs:
@@ -56,7 +66,7 @@ def create_plot_widget(title):
 
   # create plot widget and activate grid
   plot_widget = pg.PlotWidget(axisItems=axis)
-  plot_widget.showGrid(x=True, y=True, alpha=255)
+  plot_widget.showGrid(x=True, y=True, alpha=1)
 
   return plot_widget
 

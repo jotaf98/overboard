@@ -74,13 +74,13 @@ class Window(QtWidgets.QMainWindow):
     
     # dropdown lists for plot configuration
     self.x_dropdown = self.create_dropdown(sidebar, label='X axis', default='iteration',
-      options=['Panel metric', 'All metrics', 'iteration', 'time'], setting_name='x_dropdown')
+      options=['Panel metric', 'All metrics', 'iteration', 'time', 'time (relative)'], setting_name='x_dropdown')
 
     self.x_categorical_checkbox = self.create_checkbox(sidebar,
       label='Treat X as categorical', default=False, setting_name='x_categorical_checkbox')
 
     self.y_dropdown = self.create_dropdown(sidebar, label='Y axis', default='Panel metric',
-      options=['Panel metric', 'All metrics', 'iteration', 'time'], setting_name='y_dropdown')
+      options=['Panel metric', 'All metrics', 'iteration', 'time', 'time (relative)'], setting_name='y_dropdown')
 
     self.y_categorical_checkbox = self.create_checkbox(sidebar,
       label='Treat Y as categorical', default=False, setting_name='y_categorical_checkbox')
