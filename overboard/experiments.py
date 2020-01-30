@@ -95,8 +95,8 @@ class Experiment():
     self.directory = directory
 
     self.meta = {}
-    self.names = []
-    self.data = []
+    self.metrics = []  # names of metrics
+    self.data = []  # data for each metric (one list per metric)
     self.done = False  # true after reading and the experiment is done writing too
 
     self.visible = True
@@ -135,12 +135,12 @@ class Experiment():
     self.window.on_exp_meta_ready(self)
 
   def on_header_ready(self, header):  
-    self.names = header
+    self.metrics = header
     self.data = [[] for _ in header]  # initialize each column of data
     self.window.on_exp_header_ready(self)
 
   def on_data_ready(self, data):  
-    assert(len(self.names) > 0)  # sanity check, on_header_ready should have been called before
+    assert(len(self.metrics) > 0)  # sanity check, on_header_ready should have been called before
 
     # append new values to each existing column, and update plots
     for (column, new_values) in zip(self.data, data):

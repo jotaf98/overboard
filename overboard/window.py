@@ -74,13 +74,13 @@ class Window(QtWidgets.QMainWindow):
     
     # dropdown lists for plot configuration
     self.x_dropdown = self.create_dropdown(sidebar, label='X axis', default='iteration',
-      options=['Panel metric', 'All metrics', 'iteration'], setting_name='x_dropdown')
+      options=['Panel metric', 'All metrics', 'iteration', 'time'], setting_name='x_dropdown')
 
     self.x_categorical_checkbox = self.create_checkbox(sidebar,
       label='Treat X as categorical', default=False, setting_name='x_categorical_checkbox')
 
     self.y_dropdown = self.create_dropdown(sidebar, label='Y axis', default='Panel metric',
-      options=['Panel metric', 'All metrics', 'iteration'], setting_name='y_dropdown')
+      options=['Panel metric', 'All metrics', 'iteration', 'time'], setting_name='y_dropdown')
 
     self.y_categorical_checkbox = self.create_checkbox(sidebar,
       label='Treat Y as categorical', default=False, setting_name='y_categorical_checkbox')
@@ -198,6 +198,8 @@ class Window(QtWidgets.QMainWindow):
     self.on_filter_ready()
 
   def process_events_if_needed(self):
+    """Process events if enough time has passed, to keep the GUI
+    responsive during potentially heavy operations in the main thread"""
     if time() - self.last_process_events > 0.5:  # limit to once every 0.5 seconds      
       QtWidgets.QApplication.processEvents()
       self.last_process_events = time()
@@ -374,7 +376,7 @@ class Window(QtWidgets.QMainWindow):
   def on_exp_header_ready(self, exp):
     """Called by Experiment when the header data (metrics/column names) has been read"""
     # update dropdown lists to include all metric names
-    for name in exp.names:
+    for name in exp.metrics:
       if self.x_dropdown.findText(name) < 0:
         self.x_dropdown.addItem(name)
       if self.y_dropdown.findText(name) < 0:
@@ -534,6 +536,7 @@ class Window(QtWidgets.QMainWindow):
       for exp in self.experiments.exps.values():
         err = self.filter_experiment(exp)
         if err: return
+        self.process_events_if_needed()  # keep it responsive
       
       # add to auto-complete model, if there was no error
       text = self.filter_edit.text()

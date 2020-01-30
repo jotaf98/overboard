@@ -99,7 +99,7 @@ class Plots():
         x_option = "iteration"
         self.window.x_dropdown.setCurrentText(x_option)
       if y_option == "Panel metric":
-        y_option = "All metrics"
+        y_option = "time"
         self.window.y_dropdown.setCurrentText(y_option)
 
     if x_option == "All metrics" and y_option == "All metrics":
@@ -109,7 +109,7 @@ class Plots():
     # create list of panels by: metric, experiment, hyper-parameter type,
     # value of a single hyper-parameter, or create a single panel
     if panel_option == "One per metric":
-      panels = [(x_option, name) for name in exp.names]
+      panels = [(x_option, name) for name in exp.metrics]
 
     elif panel_option == "One per run":
       panels = [(None, exp.name)]  # add() expects a tuple, using 2nd element for plot title
@@ -128,9 +128,9 @@ class Plots():
     for panel in panels:  # possibly spread plots across panels
       lines = [(x_option, y_option)]  # single line per panel, with these X and Y sources
       if x_option == "All metrics":  # several lines in a panel - one per metric
-        lines = [(name, y_option) for name in exp.names]
+        lines = [(name, y_option) for name in exp.metrics]
       elif y_option == "All metrics":
-        lines = [(x_option, name) for name in exp.names]
+        lines = [(x_option, name) for name in exp.metrics]
 
       for (x, y) in lines:  # possibly create multiple lines for this panel
         if x_option == "Panel metric": x = panel[1]  # different metrics per panel
@@ -140,8 +140,8 @@ class Plots():
         if x == y: continue
 
         # skip if this experiment does not have the required data
-        if x not in exp.meta and x not in exp.names: continue
-        if y not in exp.meta and y not in exp.names: continue
+        if x not in exp.meta and x not in exp.metrics: continue
+        if y not in exp.meta and y not in exp.metrics: continue
 
         # final touches and compose dict
         style = exp.name
@@ -153,7 +153,7 @@ class Plots():
     """Creates or updates plots associated with given experiment, creating panels if needed.
     If the experiment is marked as invisible/filtered, nothing will be drawn."""
 
-    if not exp.visible or exp.is_filtered or len(exp.names) == 0:
+    if not exp.visible or exp.is_filtered or len(exp.metrics) == 0:
       return False  # plots are invisible or no data loaded yet
 
     self.set_changing_plots(True)
@@ -305,12 +305,20 @@ class Plots():
     if plot['x'] in exp.meta:
       xs = [exp.meta[plot['x']]]  # a single point, with the chosen hyper-parameter
     else:
-      xs = exp.data[exp.names.index(plot['x'])]  # several points, with the chosen metric
+      if plot['x'] not in exp.metrics:  # final sanity check
+        logging.warning("The chosen metric was not found in this experiment.")
+        xs = []
+      else:
+        xs = exp.data[exp.metrics.index(plot['x'])]  # several points, with the chosen metric
 
     if plot['y'] in exp.meta:
       ys = [exp.meta[plot['y']]]
     else:
-      ys = exp.data[exp.names.index(plot['y'])]
+      if plot['y'] not in exp.metrics:  # final sanity check
+        logging.warning("The chosen metric was not found in this experiment.")
+        ys = []
+      else:
+        ys = exp.data[exp.metrics.index(plot['y'])]
 
     # if one axis is a scalar (hyper-parameter) and another is not (metric), only show
     # a single data point. use "scalar display" option to decide which metric to keep.
@@ -439,7 +447,7 @@ class Plots():
 
   def remove(self, exp):
     """Removes all plots associated with an experiment (inverse of Plots.add)"""
-    if len(exp.names) == 0:  # no data yet
+    if len(exp.metrics) == 0:  # no data yet
       return
 
     self.set_changing_plots(True)
