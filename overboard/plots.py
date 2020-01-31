@@ -34,7 +34,7 @@ class Plots():
     window.plots = self  # back-reference
 
     self.panels = {}  # widgets containing plots, indexed by name (usually the plot title at the top)
-    self.hovered_line_id = None
+    self.hovered_plot_info = None
     self.changing_plots = False
     
     # reuse styles from hidden experiments if possible (early styles are
@@ -153,14 +153,14 @@ class Plots():
         if x_option == "Panel metric": x = panel  # different metrics per panel
         if y_option == "Panel metric": y = panel
 
-        # a plot with the same values on X and Y is redundant, so skip it
-        if x == y: continue
-
         # special option: time aligned to the same origin
         if x == 'time (relative)': (x, x_relative) = ('time', True)
         else: x_relative = False
         if y == 'time (relative)': (y, y_relative) = ('time', True)
         else: y_relative = False
+
+        # a plot with the same values on X and Y is redundant, so skip it
+        if x == y: continue
 
         # skip if this experiment does not have the required data
         if x not in exp.meta and x not in exp.metrics: continue
@@ -168,7 +168,7 @@ class Plots():
 
         # final touches and compose dict
         info.append(dict(panel=panel, x=x, y=y, line_id=(x, y, line_id),
-          merge_info=merge_info, merge_type=merge_type,
+          exp_name=exp.name, merge_info=merge_info, merge_type=merge_type,
           x_relative=x_relative, y_relative=y_relative))
     return info
 
@@ -202,6 +202,7 @@ class Plots():
       else:
         # update existing one
         line = panel.plots_dict[plot['line_id']]
+      line.plot_info = plot  # store the plot information for later, e.g. on mouse-over
       line.mouse_over = False
 
       has_new_style = (exp.style_idx is None)  # remember if a new style is assigned
@@ -556,14 +557,12 @@ class Plots():
     point = plot_item.vb.mapSceneToView(event.pos())
     
     hovered = None
-    hovered_id = (None, None, None)
-    for (line_id, line) in panel.plots_dict.items():
+    for line in panel.plots_dict.values():
       # only the first one gets selected
       inside = (not hovered and (line.curve.mouseShape().contains(point) or line.scatter.pointsAt(point)))
 
       if inside:
         hovered = line
-        hovered_id = line_id
         if not line.mouse_over:
           # change line style to thicker
           line.original_pen = line.opts['pen']
@@ -622,20 +621,20 @@ class Plots():
         if y % 1 == 0: y = str(int(y))
         else: y = float('%.3g' % y)
       
-      # show data coordinates and line info
-      (x_name, y_name, exp_name) = hovered_id[:3]
-      text = f"{exp_name}<br/>({x_name}={x}, {y_name}={y})"
+      # show data coordinates and line information, and store it
+      # for on_mouse_click to access later
+      info = self.hovered_plot_info = hovered.plot_info
+      text = f"{info['exp_name']}<br/>({info['x']}={x}, {info['y']}={y})"
 
     else:
       panel.cursor_dot.setVisible(False)
       text = ""
       vline_x = x
+      self.hovered_plot_info = None
 
     # set positions and text
     panel.cursor_label.setText(text)  #, size='10pt'
     panel.cursor_vline.setValue(vline_x)
-
-    self.hovered_line_id = hovered_id
 
     pg.PlotWidget.mouseMoveEvent(panel.plot_widget, event)
 
@@ -646,8 +645,9 @@ class Plots():
 
   def on_mouse_click(self, event, panel):
     """Select experiment associated with the currently hovered line (by name)"""
-    self.window.select_experiment(self.hovered_line_id[2])
-    event.accept()
+    if self.hovered_plot_info is not None:
+      self.window.select_experiment(self.hovered_plot_info['exp_name'])
+      event.accept()
     pg.PlotWidget.mousePressEvent(panel.plot_widget, event)
 
 
