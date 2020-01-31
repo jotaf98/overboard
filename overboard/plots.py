@@ -107,8 +107,6 @@ class Plots():
     y_option = self.window.y_dropdown.currentText()
     panel_option = self.window.panel_dropdown.currentText()
     merge_option = self.window.merge_dropdown.currentText()
-    merge_type = (self.window.merge_line_dropdown.currentText(),
-      self.window.merge_shade_dropdown.currentText())
 
     # some combinations are invalid, change to sensible defaults in those cases
     if panel_option == "One per metric":
@@ -132,10 +130,10 @@ class Plots():
     # create list of panels by: metric, experiment, hyper-parameter type,
     # value of a single hyper-parameter, or create a single panel
     if panel_option == "One per metric": panels = exp.metrics[:]  # explicit copy
-    elif panel_option == "One per run": panels = exp.name
-    elif panel_option == "Single panel": panels = y_option
+    elif panel_option == "One per run": panels = [exp.name]
+    elif panel_option == "Single panel": panels = [y_option]
     else:  # single hyper-parameter selected, create different panels based on value
-      panels = panel_option + ' = ' + str(exp.meta.get(panel_option, None))  # None if missing
+      panels = [panel_option + ' = ' + str(exp.meta.get(panel_option, None))]  # None if missing
 
     # possibly merge lines by some hyper-parameter; otherwise, each experiment is unique
     merge_info = (None if merge_option == "Nothing" else exp.name)
@@ -168,7 +166,7 @@ class Plots():
 
         # final touches and compose dict
         info.append(dict(panel=panel, x=x, y=y, line_id=(x, y, line_id),
-          exp_name=exp.name, merge_info=merge_info, merge_type=merge_type,
+          exp_name=exp.name, merge_info=merge_info,
           x_relative=x_relative, y_relative=y_relative))
     return info
 
@@ -209,7 +207,7 @@ class Plots():
 
       if plot['merge_info'] is not None:
         # handle merged plots, by updating the statistics to display first
-        (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, plot['merge_info'], xs, ys, plot['merge_type'])
+        (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, plot['merge_info'], xs, ys)
 
         # share the same style among a group of merged experiments
         if exp.style_idx is None:
@@ -447,7 +445,7 @@ class Plots():
     
     return (xs, ys, x_is_categ, y_is_categ)
 
-  def update_merged_stats(self, line, merge_info, xs=None, ys=None, merge_type=None):
+  def update_merged_stats(self, line, merge_info, xs=None, ys=None):
     # update the unmerged data, stored in the line object
     if not hasattr(line, 'unmerged_xs'):
       line.unmerged_xs = {}
@@ -472,20 +470,23 @@ class Plots():
     all_xs = np.array(list(zip_longest(*list(line.unmerged_xs.values()), fillvalue=np.nan)))
     all_ys = np.array(list(zip_longest(*list(line.unmerged_ys.values()), fillvalue=np.nan)))
 
-    # compute statistics
-    if merge_type[0] == 'Median':
+    # compute statistics      
+    merged_line = self.window.merge_line_dropdown.currentText()
+    merged_shade = self.window.merge_shade_dropdown.currentText()
+
+    if merged_line == 'Median':
       xs = np.nanmedian(all_xs, axis=1, keepdims=False)
       ys = np.nanmedian(all_ys, axis=1, keepdims=False)
     else:  # mean
       xs = np.nanmean(all_xs, axis=1, keepdims=False)
       ys = np.nanmean(all_ys, axis=1, keepdims=False)
 
-    if merge_type[1] == 'Maximum and minimum':
+    if merged_shade == 'Maximum and minimum':
       shade_y1 = np.nanmin(all_ys, axis=1, keepdims=False)
       shade_y2 = np.nanmax(all_ys, axis=1, keepdims=False)
     else:
       # '2 x standard deviations', extract the integer factor in the first character and use it
-      factor = int(merge_type[1][0])
+      factor = int(merged_shade[0])
       std = factor * np.nanstd(all_ys, axis=1, keepdims=False)
       (shade_y1, shade_y2) = (ys - std, ys + std)
 
