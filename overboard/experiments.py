@@ -102,9 +102,7 @@ class Experiment():
     self.visible = True
     self.is_selected = False
     self.is_filtered = False
-
-    # assign a plot style to this experiment
-    (self.style_order, self.style) = window.plots.get_style()
+    self.style_idx = None  # style index, for when it's assigned (see Plots.assign_exp_style)
 
     # register this experiment with the main window
     self.window = window

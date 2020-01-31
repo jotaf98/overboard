@@ -12,6 +12,7 @@ from PyQt5.QtCore import Qt
 import os, json
 from time import time
 from datetime import datetime, timezone
+from functools import partial
 
 import pyqtgraph as pg
 
@@ -92,7 +93,7 @@ class Window(QtWidgets.QMainWindow):
       options=['Last value', 'Maximum', 'Minimum'], setting_name='scalar_dropdown')
 
     self.merge_dropdown = self.create_dropdown(sidebar, label='Merge', default='Nothing',
-      options=['Nothing'], setting_name='merge_dropdown')
+      options=['Nothing'], setting_name='merge_dropdown', reset_style=True)
 
     self.merge_line_dropdown = self.create_dropdown(sidebar, label='Merged line', default='Mean',
       options=['Mean', 'Median'], setting_name='merge_line_dropdown')
@@ -227,7 +228,7 @@ class Window(QtWidgets.QMainWindow):
 
     return panel
   
-  def create_dropdown(self, sidebar, label, options, setting_name, default):
+  def create_dropdown(self, sidebar, label, options, setting_name, default, reset_style=False):
     """Create a new dropdown menu, associated with a persistent setting"""
     rows = sidebar.rowCount()
     sidebar.addWidget(QtWidgets.QLabel(label), rows, 0)
@@ -235,7 +236,7 @@ class Window(QtWidgets.QMainWindow):
     for option in options:
       dropdown.addItem(option)
     dropdown.setCurrentText(self.settings.value(setting_name, default, type=str))
-    dropdown.activated.connect(self.rebuild_plots)
+    dropdown.activated.connect(partial(self.rebuild_plots, reset_style=reset_style))
     sidebar.addWidget(dropdown, rows, 1)
     return dropdown
 
@@ -275,7 +276,7 @@ class Window(QtWidgets.QMainWindow):
     icon.mousePressEvent = lambda _: self.on_icon_click(icon, exp)
 
     table.setCellWidget(row, 0, icon)
-    self.redraw_icon(icon, exp)
+    self.redraw_icon(exp, icon)
 
     # show experiment name
     self.set_table_cell(row, 1, exp.name, exp, 'run')
@@ -286,8 +287,9 @@ class Window(QtWidgets.QMainWindow):
 
     self.process_events_if_needed()
 
-  def redraw_icon(self, icon, exp):
-    """Update an icon in the table by redrawing its pixmap with an experiment's style"""
+  def redraw_icon(self, exp, icon=None, style=None):
+    """Update an icon in the table by redrawing its pixmap with an experiment's style.
+    Both the icon widget and the style are optional (for optimization only)."""
     if icon is None:  # allow omitting the icon widget for convenience
       icon = self.table.cellWidget(exp.table_row.row(), 0)
 
@@ -312,11 +314,14 @@ class Window(QtWidgets.QMainWindow):
 
     # draw line, if the experiment is visible
     if exp.visible:
-      pen = pg.mkPen(exp.style)
-      if exp.is_selected:
-        pen.setWidth(pen.width() + 2)
-      painter.setPen(pen)
-      painter.drawLine(x + 0.2 * w, y + 0.5 * h, x + 0.8 * w, y + 0.5 * h)
+      if style is None:
+        style = self.plots.get_exp_style(exp, assign=False)
+      if style is not None:  # may not be assigned yet
+        pen = pg.mkPen(style)
+        if exp.is_selected:
+          pen.setWidth(pen.width() + 2)
+        painter.setPen(pen)
+        painter.drawLine(x + 0.2 * w, y + 0.5 * h, x + 0.8 * w, y + 0.5 * h)
 
     painter.end()
     icon.repaint()  # important, to show changes on screen
@@ -382,9 +387,11 @@ class Window(QtWidgets.QMainWindow):
       if self.y_dropdown.findText(name) < 0:
         self.y_dropdown.addItem(name)
 
-  def rebuild_plots(self):
+  def rebuild_plots(self, reset_style=False):
     """Rebuild all plots (e.g. when plot options such as x/y axis change)"""
     if not self.plots.changing_plots:  # cancel when already rebuilding the plots (i.e. called recursively)
+      if reset_style:
+        self.plots.drop_all_exp_styles()
       self.plots.remove_all()
       for exp in self.experiments.exps.values():
         visible = self.plots.add(exp)
@@ -443,21 +450,17 @@ class Window(QtWidgets.QMainWindow):
 
     if exp.is_filtered: return  # shouldn't happen    
     if exp.visible:
-      # remove all associated plots
+      # remove all associated plots, and reset the experiment style so it can be used by others
       exp.visible = False
       self.plots.remove(exp)
-
-      # reset style, allowing it to be used by other experiments
-      self.plots.drop_style(exp.style_order, exp.style)
-      exp.style = {}
+      self.plots.drop_exp_style(exp)
     else:
-      # assign new style, and create plots
+      # create plots (a new style will be assigned if necessary)
       exp.visible = True
-      (exp.style_order, exp.style) = self.plots.get_style()
       self.plots.add(exp)
 
     # update icon
-    self.redraw_icon(icon, exp)
+    self.redraw_icon(exp, icon)
 
   def on_table_select(self):
     """Select experiment on table row click"""
@@ -483,7 +486,7 @@ class Window(QtWidgets.QMainWindow):
     (old_exp, old_icon) = self.selected_exp
     if old_exp:
       old_exp.is_selected = False
-      self.redraw_icon(old_icon, old_exp)
+      self.redraw_icon(old_exp, old_icon)
       self.plots.add(old_exp)  # update its view, in case it's visible
 
     if exp and exp.visible:  # don't select if invisible
@@ -493,7 +496,7 @@ class Window(QtWidgets.QMainWindow):
       self.plots.add(exp)
       self.selected_exp = (exp, icon)
       self.visualizations.select(exp)
-      self.redraw_icon(icon, exp)
+      self.redraw_icon(exp, icon)
 
       if not clicked_table:  # update table selection
         self.table.selectRow(exp.table_row.row())

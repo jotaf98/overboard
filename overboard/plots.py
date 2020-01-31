@@ -35,31 +35,54 @@ class Plots():
 
     self.panels = {}  # widgets containing plots, indexed by name (usually the plot title at the top)
     self.hovered_line_id = None
-    self.unused_styles = []  # reuse styles from hidden experiments. this is a heap so early styles have priority.
-    self.next_style_index = 0
     self.changing_plots = False
+    
+    # reuse styles from hidden experiments if possible (early styles are
+    # more distinguishable). note we only store style indexes, to allow
+    # easy changing later (e.g. style by dashes only or colors).
+    self.unused_styles = []  # keep unused styles in a heap so early styles have priority
+    self.next_style_index = 0  # next unused style that is not in the heap
 
+    # set general PyQtGraph options
     pg.setConfigOptions(antialias=True, background='w', foreground='k')  # black on white
 
-  def get_style(self):
+  def assign_exp_style(self, exp):
+    """Assign a new style to an experiment"""
     # reuse a previous style if possible, in order
     if len(self.unused_styles) > 0:
-      return heapq.heappop(self.unused_styles)
-    
-    # otherwise, get a new one. start by varying color, then dashes, then line width.
-    idx = self.next_style_index
+      exp.style_idx = heapq.heappop(self.unused_styles)
+    else:
+      # otherwise, get a new one
+      exp.style_idx = self.next_style_index
+      self.next_style_index += 1
+
+  def drop_exp_style(self, exp):
+    """Remove the style of an experiment, and consider that style available for others"""
+    if exp.style_idx is not None:
+      heapq.heappush(self.unused_styles, exp.style_idx)
+      exp.style_idx = None
+  
+  def drop_all_exp_styles(self):
+    """Quickly reset the styles of all experiments"""
+    self.unused_styles.clear()
+    self.next_style_index = 0
+    for exp in self.window.experiments.exps.values():
+      exp.style_idx = None
+
+  def get_exp_style(self, exp, assign=True):
+    """Return a dict with the unique style of an experiment, assigning one if necessary"""
+    if exp.style_idx is None:
+      if not assign: return None  # asked to not assign a style
+      self.assign_exp_style(exp)
+    idx = exp.style_idx
+
+    # start by varying color, then dashes, then line width
     color = palette[idx % len(palette)]
     dash = dashes[(idx // len(palette)) % len(dashes)]
     width = widths[(idx // (len(palette) * len(dashes))) % len(widths)]
 
-    self.next_style_index = idx + 1
-
-    return (idx, {'color': color, 'style': dash, 'width': width})
+    return {'color': color, 'style': dash, 'width': width}
   
-  def drop_style(self, style_order, style):
-    # return a style to the set of available ones
-    heapq.heappush(self.unused_styles, (style_order, style))
-
   def set_changing_plots(self, is_changing):
     """Marks the start or end of changes to the plots (e.g. Plots.add). This prevents
     recursion when drawing causes GUI changes (e.g. invalid option combinations
@@ -108,17 +131,11 @@ class Plots():
 
     # create list of panels by: metric, experiment, hyper-parameter type,
     # value of a single hyper-parameter, or create a single panel
-    if panel_option == "One per metric":
-      panels = [(x_option, name) for name in exp.metrics]
-
-    elif panel_option == "One per run":
-      panels = [(None, exp.name)]  # add() expects a tuple, using 2nd element for plot title
-    
-    elif panel_option == "Single panel":
-      panels = [(None, y_option)]
-    
+    if panel_option == "One per metric": panels = exp.metrics[:]  # explicit copy
+    elif panel_option == "One per run": panels = exp.name
+    elif panel_option == "Single panel": panels = y_option
     else:  # single hyper-parameter selected, create different panels based on value
-      panels = [(None, panel_option + ' = ' + str(exp.meta.get(panel_option, None)))]  # None if missing
+      panels = panel_option + ' = ' + str(exp.meta.get(panel_option, None))  # None if missing
 
     # possibly merge lines by some hyper-parameter; otherwise, each experiment is unique
     merge_info = (None if merge_option == "Nothing" else exp.name)
@@ -133,8 +150,8 @@ class Plots():
         lines = [(x_option, name) for name in exp.metrics]
 
       for (x, y) in lines:  # possibly create multiple lines for this panel
-        if x_option == "Panel metric": x = panel[1]  # different metrics per panel
-        if y_option == "Panel metric": y = panel[1]
+        if x_option == "Panel metric": x = panel  # different metrics per panel
+        if y_option == "Panel metric": y = panel
 
         # a plot with the same values on X and Y is redundant, so skip it
         if x == y: continue
@@ -150,9 +167,8 @@ class Plots():
         if y not in exp.meta and y not in exp.metrics: continue
 
         # final touches and compose dict
-        style = exp.name
-        info.append(dict(panel=panel, x=x, y=y, style=style, x_label=x,
-          line_id=(x, y, line_id), merge_info=merge_info, merge_type=merge_type,
+        info.append(dict(panel=panel, x=x, y=y, line_id=(x, y, line_id),
+          merge_info=merge_info, merge_type=merge_type,
           x_relative=x_relative, y_relative=y_relative))
     return info
 
@@ -188,22 +204,31 @@ class Plots():
         line = panel.plots_dict[plot['line_id']]
       line.mouse_over = False
 
-      # handle merged plots, by updating the statistics to display first
+      has_new_style = (exp.style_idx is None)  # remember if a new style is assigned
+
       if plot['merge_info'] is not None:
-        (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, plot['merge_info'], xs, ys, exp.style, plot['merge_type'])
+        # handle merged plots, by updating the statistics to display first
+        (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, plot['merge_info'], xs, ys, plot['merge_type'])
 
-        # also, share the same style among a group of merged experiments
-        if hasattr(line, 'style') and exp.style != line.style:
-          exp.style = line.style
-          self.window.redraw_icon(None, exp)  # update the icon
+        # share the same style among a group of merged experiments
+        if exp.style_idx is None:
+          if not hasattr(line, 'style_idx'):
+            self.assign_exp_style(exp)  # new style
+            line.style_idx = exp.style_idx
+          else:  # use the same style as the previous merged experiments
+            exp.style_idx = line.style_idx
 
-      # create pen with the experiment's style (line color, dashes and width)
-      pen = pg.mkPen(exp.style)
+      # get the experiment's style (color, dashes, etc)
+      style = self.get_exp_style(exp)
 
-      if exp.is_selected:  # selected lines are thicker
-        pen.setWidth(exp.style.get('width', 2) + 2)
+      if has_new_style:  # update the icon if the style was missing before
+        self.window.redraw_icon(exp)
       
-      # args to assign to PlotDataItem line
+      if exp.is_selected:  # selected lines are thicker
+        style['width'] = style.get('width', 2) + 2
+      
+      # create pen with the experiment's style, and args to assign to PlotDataItem line
+      pen = pg.mkPen(style)
       data = dict(x=xs, y=ys, pen=pen)
 
       # for single points, plot a marker/symbol, since the line won't show up
@@ -272,9 +297,7 @@ class Plots():
     panel = self.window.add_panel(plot_widget, title)
 
     plot_item = panel.plot_widget.getPlotItem()
-
-    if plot['x_label'] is not None:  # set X axis label if needed
-      plot_item.setLabel('bottom', plot['x_label'])
+    plot_item.setLabel('bottom', plot['x'])  # set X axis label
 
     # mouse cursor (vertical line)
     panel.cursor_vline = pg.InfiniteLine(angle=90, pen="#B0B0B0")
@@ -423,12 +446,11 @@ class Plots():
     
     return (xs, ys, x_is_categ, y_is_categ)
 
-  def update_merged_stats(self, line, merge_info, xs=None, ys=None, style=None, merge_type=None):
+  def update_merged_stats(self, line, merge_info, xs=None, ys=None, merge_type=None):
     # update the unmerged data, stored in the line object
     if not hasattr(line, 'unmerged_xs'):
       line.unmerged_xs = {}
       line.unmerged_ys = {}
-      line.style = style
     
     if xs is not None:  # add it
       line.unmerged_xs[merge_info] = xs
