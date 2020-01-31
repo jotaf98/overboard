@@ -187,8 +187,12 @@ class DateAxisItem(FancyAxis):  # FancyAxis inherits from pyqtgraph.AxisItem
         self.setParentItem(plotItem)
         viewBox = plotItem.getViewBox()
         self.linkToView(viewBox)
-        self._oldAxis = plotItem.axes[self.orientation]['item']
-        self._oldAxis.hide()
+
+        old_axis = plotItem.axes[self.orientation]['item']
+        if old_axis:
+            old_axis.hide()
+            plotItem.layout.removeItem(old_axis)
+
         plotItem.axes[self.orientation]['item'] = self
         pos = plotItem.axes[self.orientation]['pos']
         plotItem.layout.addItem(self, *pos)
