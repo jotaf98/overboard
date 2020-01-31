@@ -292,7 +292,7 @@ class Plots():
     by define_plots. Used by Plots.add."""
 
     # create new panel to contain plot
-    title = plot['panel'][1]
+    title = plot['panel']
     plot_widget = create_plot_widget(title)
     panel = self.window.add_panel(plot_widget, title)
 
