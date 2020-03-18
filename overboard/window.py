@@ -517,7 +517,7 @@ class Window(QtWidgets.QMainWindow):
           # write to another file and only then replace the original (in case of crashes/bad writes)
           exp.meta['notes'] = item.text()
           with open(exp.directory + '/meta.json.partial', 'w') as file:
-            json.dump(exp.meta, file, sort_keys=True, indent=4)
+            json.dump(exp.meta, file, sort_keys=True, indent=4, default=str)
           os.replace(exp.directory + '/meta.json.partial', exp.directory + '/meta.json')
           
 
