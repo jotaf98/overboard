@@ -1,6 +1,7 @@
 
 import os, math, time, json, inspect, shutil, re, time, errno
 from datetime import datetime, timezone
+from numbers import Number
 
 try:
   from torch import save
@@ -134,21 +135,27 @@ class Logger:
       self.wrote_header = True
 
   def append(self, points=None):
-    """Write the given stats dict to CSV file. If none is given, the average values computed so far are used (see update_average)."""
+    """Write the given statistics dict to CSV file. If none is given, the average values computed so far are used (see update_average)."""
 
     if points is None:
       # use computed average, and reset accumulator
       points = self.average()
       self.avg_accum = {}
       self.avg_count = {}
+    else:
+      for value in points.values():
+        if not isinstance(value, Number):
+          raise ValueError('Statistics to log must be native Python numbers.')
 
     if self.stat_names is None:  # assume the given stats are all there is
       self.stat_names = list(points.keys())
+      if not (all(isinstance(name, str) and not ',' in name for name in self.stat_names)):
+        raise ValueError("The names of statistics to log must be strings with no commas.")
 
     else:  # validate them
       for name in points.keys():
         if name not in self.stat_names:
-          raise ValueError('Unknown stat name: ' + name + '. Note that no new stats can be added after the first Logger.append call. Alternatively, they can be specified in the constructor.')
+          raise ValueError('Unknown stat name: ' + name + '. Note that no new stats can be added after the first Logger.append call, since the output CSV file has a fixed number of columns. Alternatively, they can be specified in the constructor.')
 
     # write header if not done yet
     if not self.wrote_header:
@@ -171,6 +178,9 @@ class Logger:
   def update_average(self, points):
     """Keep track of average value for each stat, adding a new data point."""
     for (name, value) in points.items():
+      if not isinstance(value, Number):
+        raise ValueError('Statistics to log must be native Python numbers.')
+        
       if name not in self.avg_accum:  # initialize
         self.avg_accum[name] = value
         self.avg_count[name] = 1
