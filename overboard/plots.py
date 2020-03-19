@@ -644,7 +644,7 @@ class DisableAutoRange:
     if not self.plots.changing_plots:
       self.plots.changing_plots = True
 
-      for panel in self.panels.values():  # disable auto-range on all plot items
+      for panel in self.plots.panels.values():  # disable auto-range on all plot items
         plot_item = panel.plot_widget.getPlotItem()
         if plot_item.autoRangeEnabled():
           plot_item.disableAutoRange()
