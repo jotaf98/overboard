@@ -352,11 +352,11 @@ class Plots():
 
     # check data points' types to know what axes to create (numeric, time or categorical).
     # handle datetimes. create time axes if needed, and convert datetimes to numeric values
-    if all(isinstance(x, datetime) for x in xs):
+    if len(xs) > 0 and all(isinstance(x, datetime) for x in xs):
       if not isinstance(plot_item.axes['bottom']['item'], DateAxisItem):
         axis = DateAxisItem(orientation='bottom')
         axis.attachToPlotItem(plot_item)
-        axis.setGrid(1)
+        axis.setGrid(255)
 
       # plot values relative to the same origin (i.e. remove minimum)
       if plot['x_relative']:
@@ -391,7 +391,7 @@ class Plots():
 
     # same as above, for Y axis.
     # handle datetimes. create time axes if needed, and convert datetimes to numeric values
-    if all(isinstance(y, datetime) for y in ys):
+    if len(ys) > 0 and all(isinstance(y, datetime) for y in ys):
       if not isinstance(plot_item.axes['left']['item'], DateAxisItem):
         axis = DateAxisItem(orientation='left', backgroundColor=None)
         axis.attachToPlotItem(plot_item)
@@ -640,21 +640,25 @@ class DisableAutoRange:
     self.plots = plots  # main Plots instance
 
   def __enter__(self):
-    self.reenable = []
+    self.reenable = False
     if not self.plots.changing_plots:
       self.plots.changing_plots = True
+      self.reenable = True
+      self.viewboxes = []
 
       for panel in self.plots.panels.values():  # disable auto-range on all plot items
-        plot_item = panel.plot_widget.getPlotItem()
-        if plot_item.autoRangeEnabled():
-          plot_item.disableAutoRange()
-          self.reenable.append(plot_item)  # remember to re-enable it later
+        view = panel.plot_widget.getPlotItem().getViewBox()
+        if view.autoRangeEnabled():
+          view.disableAutoRange()
+          self.viewboxes.append(view)
 
     return None
 
   def __exit__(self, exc_type, exc_val, exc_tb):
-    for plot_item in self.reenable:
-      plot_item.enableAutoRange()
+    if self.reenable:
+      for view in self.viewboxes:
+        view.enableAutoRange()
+      self.plots.changing_plots = False
 
 
 class Smoother():
