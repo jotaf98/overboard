@@ -229,6 +229,8 @@ class Plots():
           if y_is_categ:
             if not hasattr(line, 'jitter_y'): line.jitter_y = random() * 0.2 - 0.1
             ys[0] += line.jitter_y
+        else:
+          data['symbol'] = None
 
         # assign the point coordinates and visual properties to the PlotDataItem
         line.setData(**data)
