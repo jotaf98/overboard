@@ -536,10 +536,11 @@ class Window(QtWidgets.QMainWindow):
         return
 
     if self.experiments is not None:
-      for exp in self.experiments.exps.values():
-        err = self.filter_experiment(exp)
-        if err: return
-        self.process_events_if_needed()  # keep it responsive
+      with DisableAutoRange(self.plots):
+        for exp in self.experiments.exps.values():
+          err = self.filter_experiment(exp)
+          if err: return
+          self.process_events_if_needed()  # keep it responsive
       
       # add to auto-complete model, if there was no error
       text = self.filter_edit.text()
