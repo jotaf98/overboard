@@ -127,8 +127,10 @@ class Plots():
       panels = [panel_option + ' = ' + str(exp.meta.get(panel_option, None))]  # None if missing
 
     # possibly merge lines by some hyper-parameter; otherwise, each experiment is unique
-    merge_info = (None if merge_option == "Nothing" else exp.name)
-    line_id = (exp.name if merge_option == "Nothing" else str(exp.meta[merge_option]))
+    if merge_option == "Nothing" or merge_option not in exp.meta:
+      (merge_info, line_id) = (None, exp.name)
+    else:
+      (merge_info, line_id) = (exp.name, str(exp.meta[merge_option]))
 
     info = []  # the list of lines to plot
     for panel in panels:  # possibly spread plots across panels
