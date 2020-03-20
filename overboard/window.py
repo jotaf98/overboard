@@ -18,7 +18,6 @@ import pyqtgraph as pg
 
 from .flowlayout import FlowLayout
 from .fastslider import Slider
-from .plots import DisableAutoRange
 #from .plots import Smoother
 
 
@@ -46,6 +45,7 @@ class Window(QtWidgets.QMainWindow):
     self.plots = None  # object that manages plots
     self.visualizations = None  # object that manages custom visualizations
     self.last_process_events = time()  # to update during heavy loads
+    self.rebuilding_plots = False  # used by rebuild_plots
 
     # persistent settings
     self.settings = QtCore.QSettings('OverBoard', 'OverBoard')
@@ -390,7 +390,8 @@ class Window(QtWidgets.QMainWindow):
 
   def rebuild_plots(self, reset_style=False):
     """Rebuild all plots (e.g. when plot options such as x/y axis change)"""
-    if not self.plots.changing_plots:  # cancel when already rebuilding the plots (i.e. called recursively)
+    if not self.rebuilding_plots:  # cancel when already rebuilding the plots (i.e. called recursively)
+      self.rebuilding_plots = True
       if reset_style:
         self.plots.drop_all_exp_styles()
       self.plots.remove_all()
@@ -398,6 +399,7 @@ class Window(QtWidgets.QMainWindow):
         visible = self.plots.add(exp)
         if visible:
           self.process_events_if_needed()  # keep it responsive
+      self.rebuilding_plots = False
 
   def set_table_cell(self, row, col, value, exp, col_name, selectable=True, editable=False):
     """Set a single table cell in the sidebar"""
@@ -537,11 +539,10 @@ class Window(QtWidgets.QMainWindow):
         return
 
     if self.experiments is not None:
-      with DisableAutoRange(self.plots):
-        for exp in self.experiments.exps.values():
-          err = self.filter_experiment(exp)
-          if err: return
-          self.process_events_if_needed()  # keep it responsive
+      for exp in self.experiments.exps.values():
+        err = self.filter_experiment(exp)
+        if err: return
+        self.process_events_if_needed()  # keep it responsive
       
       # add to auto-complete model, if there was no error
       text = self.filter_edit.text()

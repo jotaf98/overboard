@@ -35,14 +35,20 @@ class Plots():
 
     self.panels = {}  # widgets containing plots, indexed by name (usually the plot title at the top)
     self.hovered_plot_info = None
-    self.changing_plots = False
-    
+
     # reuse styles from hidden experiments if possible (early styles are
     # more distinguishable). note we only store style indexes, to allow
     # easy changing later (e.g. style by dashes only or colors).
     self.unused_styles = []  # keep unused styles in a heap so early styles have priority
     self.next_style_index = 0  # next unused style that is not in the heap
 
+    # create timer to restore auto-range of plot axis progressively
+    # (auto-range is disabled when plotting for performance)
+    self.autorange_panels = {}
+    self.autorange_timer = QtCore.QTimer()
+    self.autorange_timer.timeout.connect(self.restore_autorange)
+    self.autorange_timer.start(500)
+    
     # set general PyQtGraph options
     pg.setConfigOptions(antialias=True, background='w', foreground='k')  # black on white
 
@@ -162,110 +168,110 @@ class Plots():
     if not exp.visible or exp.is_filtered or len(exp.metrics) == 0:
       return False  # plots are invisible or no data loaded yet
 
-    with DisableAutoRange(self):
-      plots = self.define_plots(exp)
-      for plot in plots:
-        # create new panel if it doesn't exist
-        if plot['panel'] not in self.panels:
-          self.add_plot_panel(plot)
+    plots = self.define_plots(exp)
+    for plot in plots:
+      # create new panel if it doesn't exist
+      if plot['panel'] not in self.panels:
+        self.add_plot_panel(plot)
 
-        panel = self.panels[plot['panel']]  # reuse existing panel
-        plot_item = panel.plot_widget.getPlotItem()
+      panel = self.panels[plot['panel']]  # reuse existing panel
+      self.pause_autorange(panel)
+      plot_item = panel.plot_widget.getPlotItem()
+      
+      # get data points, pre-processed to ensure they are numeric. this may edit the axes.
+      (xs, ys, x_is_categ, y_is_categ) = self.get_numeric_data_points(exp, plot, plot_item)
+
+      # check if plot line already exists
+      if plot['line_id'] not in panel.plots_dict:
+        # create new line
+        line = plot_item.plot([], [])
+        line.curve.setClickable(True, 8)  # size of hover region
+        panel.plots_dict[plot['line_id']] = line
+      else:
+        # update existing one
+        line = panel.plots_dict[plot['line_id']]
+      line.plot_info = plot  # store the plot information for later, e.g. on mouse-over
+      line.mouse_over = False
+
+      has_new_style = (exp.style_idx is None)  # remember if a new style is assigned
+
+      if plot['merge_info'] is not None:
+        # handle merged plots, by updating the statistics to display first
+        (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, plot['merge_info'], xs, ys)
+
+        # share the same style among a group of merged experiments
+        if exp.style_idx is None:
+          if not hasattr(line, 'style_idx'):
+            self.assign_exp_style(exp)  # new style
+            line.style_idx = exp.style_idx
+          else:  # use the same style as the previous merged experiments
+            exp.style_idx = line.style_idx
+
+      # get the experiment's style (color, dashes, etc)
+      style = self.get_exp_style(exp)
+
+      if has_new_style:  # update the icon if the style was missing before
+        self.window.redraw_icon(exp)
+      
+      if exp.is_selected:  # selected lines are thicker
+        style['width'] = style.get('width', 2) + 2
+      
+      # create pen with the experiment's style, and args to assign to PlotDataItem line
+      pen = pg.mkPen(style)
+      data = dict(x=xs, y=ys, pen=pen)
+
+      # for single points, plot a marker/symbol, since the line won't show up
+      if len(xs) == 1:
+        data['symbol'] = 'o'
+        data['symbolBrush'] = pen.color()
+        data['symbolSize'] = pen.width() * 2 + 4
         
-        # get data points, pre-processed to ensure they are numeric. this may edit the axes.
-        (xs, ys, x_is_categ, y_is_categ) = self.get_numeric_data_points(exp, plot, plot_item)
+        # for categorical axis, jitter single points. unfortunately, points will
+        # jump around when selecting/deselecting plots, so we need to keep the
+        # amount of jitter in a state variable per line.
+        if x_is_categ:
+          if not hasattr(line, 'jitter_x'): line.jitter_x = random() * 0.2 - 0.1
+          xs[0] += line.jitter_x
+        if y_is_categ:
+          if not hasattr(line, 'jitter_y'): line.jitter_y = random() * 0.2 - 0.1
+          ys[0] += line.jitter_y
+      else:
+        data['symbol'] = None
 
-        # check if plot line already exists
-        if plot['line_id'] not in panel.plots_dict:
-          # create new line
-          line = plot_item.plot([], [])
-          line.curve.setClickable(True, 8)  # size of hover region
-          panel.plots_dict[plot['line_id']] = line
-        else:
-          # update existing one
-          line = panel.plots_dict[plot['line_id']]
-        line.plot_info = plot  # store the plot information for later, e.g. on mouse-over
-        line.mouse_over = False
+      # assign the point coordinates and visual properties to the PlotDataItem
+      line.setData(**data)
 
-        has_new_style = (exp.style_idx is None)  # remember if a new style is assigned
-
-        if plot['merge_info'] is not None:
-          # handle merged plots, by updating the statistics to display first
-          (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, plot['merge_info'], xs, ys)
-
-          # share the same style among a group of merged experiments
-          if exp.style_idx is None:
-            if not hasattr(line, 'style_idx'):
-              self.assign_exp_style(exp)  # new style
-              line.style_idx = exp.style_idx
-            else:  # use the same style as the previous merged experiments
-              exp.style_idx = line.style_idx
-
-        # get the experiment's style (color, dashes, etc)
-        style = self.get_exp_style(exp)
-
-        if has_new_style:  # update the icon if the style was missing before
-          self.window.redraw_icon(exp)
-        
-        if exp.is_selected:  # selected lines are thicker
-          style['width'] = style.get('width', 2) + 2
-        
-        # create pen with the experiment's style, and args to assign to PlotDataItem line
-        pen = pg.mkPen(style)
-        data = dict(x=xs, y=ys, pen=pen)
-
-        # for single points, plot a marker/symbol, since the line won't show up
-        if len(xs) == 1:
-          data['symbol'] = 'o'
-          data['symbolBrush'] = pen.color()
-          data['symbolSize'] = pen.width() * 2 + 4
+      # finish merged plots, by plotting the confidence intervals
+      if plot['merge_info'] is not None:
+        if len(xs) > 1:
+          # draw a shaded area. first, set the pen used to draw the outline of the shaded area
+          outline_pen = pg.mkPen(pen)
+          outline_pen.setWidthF(pen.widthF() / 3)
           
-          # for categorical axis, jitter single points. unfortunately, points will
-          # jump around when selecting/deselecting plots, so we need to keep the
-          # amount of jitter in a state variable per line.
-          if x_is_categ:
-            if not hasattr(line, 'jitter_x'): line.jitter_x = random() * 0.2 - 0.1
-            xs[0] += line.jitter_x
-          if y_is_categ:
-            if not hasattr(line, 'jitter_y'): line.jitter_y = random() * 0.2 - 0.1
-            ys[0] += line.jitter_y
-        else:
-          data['symbol'] = None
-
-        # assign the point coordinates and visual properties to the PlotDataItem
-        line.setData(**data)
-
-        # finish merged plots, by plotting the confidence intervals
-        if plot['merge_info'] is not None:
-          if len(xs) > 1:
-            # draw a shaded area. first, set the pen used to draw the outline of the shaded area
-            outline_pen = pg.mkPen(pen)
-            outline_pen.setWidthF(pen.widthF() / 3)
-            
-            if plot['line_id'] not in panel.aux_plots_dict:
-              # create for first time. we need 2 curves, setting the upper and lower
-              # limits, and then a FillBetweenItem to shade the space between them.
-              limit1 = plot_item.plot([], [])
-              limit2 = plot_item.plot([], [])
-              shade = pg.FillBetweenItem(limit1, limit2, (200, 0, 0, 128))
-              plot_item.addItem(shade)
-              panel.aux_plots_dict[plot['line_id']] = (limit1, limit2, shade)
-            else:
-              (limit1, limit2, shade) = panel.aux_plots_dict[plot['line_id']]
-            limit1.setData(x=xs, y=shade_y1, pen=outline_pen)
-            limit2.setData(x=xs, y=shade_y2, pen=outline_pen)
-
-            c = pen.color()  # shade using same color but semi-transparent
-            shade.setBrush((c.red(), c.green(), c.blue(), 64))
+          if plot['line_id'] not in panel.aux_plots_dict:
+            # create for first time. we need 2 curves, setting the upper and lower
+            # limits, and then a FillBetweenItem to shade the space between them.
+            limit1 = plot_item.plot([], [])
+            limit2 = plot_item.plot([], [])
+            shade = pg.FillBetweenItem(limit1, limit2, (200, 0, 0, 128))
+            plot_item.addItem(shade)
+            panel.aux_plots_dict[plot['line_id']] = (limit1, limit2, shade)
           else:
-            # a single point, plot as an error bar
-            data = dict(x=xs, y=ys, bottom=ys-shade_y1, top=shade_y2-ys, pen=pen)
-            if plot['line_id'] not in panel.aux_plots_dict:
-              # create for first time
-              bar = panel.aux_plots_dict[plot['line_id']] = pg.ErrorBarItem(**data)
-              plot_item.addItem(bar)
-            else:
-              panel.aux_plots_dict[plot['line_id']].setData(**data)
+            (limit1, limit2, shade) = panel.aux_plots_dict[plot['line_id']]
+          limit1.setData(x=xs, y=shade_y1, pen=outline_pen)
+          limit2.setData(x=xs, y=shade_y2, pen=outline_pen)
+
+          c = pen.color()  # shade using same color but semi-transparent
+          shade.setBrush((c.red(), c.green(), c.blue(), 64))
+        else:
+          # a single point, plot as an error bar
+          data = dict(x=xs, y=ys, bottom=ys-shade_y1, top=shade_y2-ys, pen=pen)
+          if plot['line_id'] not in panel.aux_plots_dict:
+            # create for first time
+            bar = panel.aux_plots_dict[plot['line_id']] = pg.ErrorBarItem(**data)
+            plot_item.addItem(bar)
+          else:
+            panel.aux_plots_dict[plot['line_id']].setData(**data)
 
     return len(plots) > 0  # True if some plots were actually drawn
 
@@ -481,47 +487,47 @@ class Plots():
     if len(exp.metrics) == 0:  # no data yet
       return
 
-    with DisableAutoRange(self):    
-      plots = self.define_plots(exp)
-      for plot in plots:
-        # find panel
-        if plot['panel'] in self.panels:
-          panel = self.panels[plot['panel']]
+    plots = self.define_plots(exp)
+    for plot in plots:
+      # find panel
+      if plot['panel'] in self.panels:
+        panel = self.panels[plot['panel']]
+        self.pause_autorange(panel)
 
-          # find plot line
-          line_id = plot['line_id']
-          if line_id in panel.plots_dict:
-            line = panel.plots_dict[line_id]
+        # find plot line
+        line_id = plot['line_id']
+        if line_id in panel.plots_dict:
+          line = panel.plots_dict[line_id]
 
-            if plot['merge_info'] is not None:
-              # remove this data from the merged line, and update it
-              (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, plot['merge_info'])
-              if xs is not None:
-                (limit1, limit2, shade) = panel.aux_plots_dict[plot['line_id']]
-                limit1.setData(x=xs, y=shade_y1)
-                limit2.setData(x=xs, y=shade_y2)
-              else:
-                # removed final line, nothing left
-                plot['merge_info'] = None
-                
-                # remove auxiliary plots (e.g. shaded merged plots)
-                if line_id in panel.aux_plots_dict:
-                  plot_item = panel.plot_widget.getPlotItem()
-                  for aux_object in panel.aux_plots_dict[line_id]:
-                    plot_item.removeItem(aux_object)
-                  del panel.aux_plots_dict[line_id]
-            
-            if plot['merge_info'] is None:
-              # simple line, remove it
-              plot_item = panel.plot_widget.getPlotItem()
-              plot_item.removeItem(line)
-              del panel.plots_dict[line_id]
+          if plot['merge_info'] is not None:
+            # remove this data from the merged line, and update it
+            (xs, ys, shade_y1, shade_y2) = self.update_merged_stats(line, plot['merge_info'])
+            if xs is not None:
+              (limit1, limit2, shade) = panel.aux_plots_dict[plot['line_id']]
+              limit1.setData(x=xs, y=shade_y1)
+              limit2.setData(x=xs, y=shade_y2)
+            else:
+              # removed final line, nothing left
+              plot['merge_info'] = None
+              
+              # remove auxiliary plots (e.g. shaded merged plots)
+              if line_id in panel.aux_plots_dict:
+                plot_item = panel.plot_widget.getPlotItem()
+                for aux_object in panel.aux_plots_dict[line_id]:
+                  plot_item.removeItem(aux_object)
+                del panel.aux_plots_dict[line_id]
+          
+          if plot['merge_info'] is None:
+            # simple line, remove it
+            plot_item = panel.plot_widget.getPlotItem()
+            plot_item.removeItem(line)
+            del panel.plots_dict[line_id]
 
-          # if the last line was deleted, delete the panel too
-          if len(panel.plots_dict) == 0:
-            panel.setParent(None)
-            panel.deleteLater()
-            del self.panels[plot['panel']]
+        # if the last line was deleted, delete the panel too
+        if len(panel.plots_dict) == 0:
+          panel.setParent(None)
+          panel.deleteLater()
+          del self.panels[plot['panel']]
 
   def remove_all(self):
     """Remove all plots, fast"""
@@ -632,34 +638,24 @@ class Plots():
       event.accept()
     pg.PlotWidget.mousePressEvent(panel.plot_widget, event)
 
+  def pause_autorange(self, panel):
+    """Pause auto-range temporarily when plotting, for performance (restored by a timer)"""
+    if panel not in self.autorange_panels:  # if already paused do nothing
+      view = panel.plot_widget.getPlotItem().getViewBox()
+      state = view.autoRangeEnabled()
+      if any(state):  # list with 2 booleans, True if each axis has auto-range enabled
+        view.disableAutoRange()
+        self.autorange_panels[panel] = state
 
-class DisableAutoRange:
-  """Context manager (with statement) to disable (and later re-enable) PyQtGraph's
-  auto-range during long sequences of draw commands, for performance"""
-  def __init__(self, plots):
-    self.plots = plots  # main Plots instance
+  def restore_autorange(self):
+    """Restore auto-range of plot axis progressively, called by a timer"""
+    if len(self.autorange_panels) > 0:
+      # pop oldest panel off the stack (this is still an ordered dict to check membership)
+      (panel, state) = next(iter(self.autorange_panels.items()))
+      del self.autorange_panels[panel]
 
-  def __enter__(self):
-    self.reenable = False
-    if not self.plots.changing_plots:
-      self.plots.changing_plots = True
-      self.reenable = True
-      self.viewboxes = []
-
-      for (name, panel) in self.plots.panels.items():  # disable auto-range on all plot items
-        view = panel.plot_widget.getPlotItem().getViewBox()
-        state = view.autoRangeEnabled()
-        if any(state):  # list with 2 booleans, one per axis
-          view.disableAutoRange()
-          self.viewboxes.append((view, state))
-
-    return None
-
-  def __exit__(self, exc_type, exc_val, exc_tb):
-    if self.reenable:
-      for (view, state) in self.viewboxes:
-        view.enableAutoRange(x=state[0], y=state[1])
-      self.plots.changing_plots = False
+      view = panel.plot_widget.getPlotItem().getViewBox()
+      view.enableAutoRange(x=state[0], y=state[1])
 
 
 class Smoother():
