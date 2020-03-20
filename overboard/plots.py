@@ -646,18 +646,19 @@ class DisableAutoRange:
       self.reenable = True
       self.viewboxes = []
 
-      for panel in self.plots.panels.values():  # disable auto-range on all plot items
+      for (name, panel) in self.plots.panels.items():  # disable auto-range on all plot items
         view = panel.plot_widget.getPlotItem().getViewBox()
-        if view.autoRangeEnabled():
+        state = view.autoRangeEnabled()
+        if any(state):  # list with 2 booleans, one per axis
           view.disableAutoRange()
-          self.viewboxes.append(view)
+          self.viewboxes.append((view, state))
 
     return None
 
   def __exit__(self, exc_type, exc_val, exc_tb):
     if self.reenable:
-      for view in self.viewboxes:
-        view.enableAutoRange()
+      for (view, state) in self.viewboxes:
+        view.enableAutoRange(x=state[0], y=state[1])
       self.plots.changing_plots = False
 
 

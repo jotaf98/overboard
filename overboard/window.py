@@ -18,6 +18,7 @@ import pyqtgraph as pg
 
 from .flowlayout import FlowLayout
 from .fastslider import Slider
+from .plots import DisableAutoRange
 #from .plots import Smoother
 
 
