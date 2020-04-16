@@ -153,6 +153,10 @@ class Plots():
         # a plot with the same values on X and Y is redundant, so skip it
         if x == y: continue
 
+        # skip (arguably) useless plots: time vs iteration
+        if x in ('time', 'iteration') and y in ('time', 'iteration'):
+          continue
+
         # skip if this experiment does not have the required data
         if x not in exp.meta and x not in exp.metrics: continue
         if y not in exp.meta and y not in exp.metrics: continue
