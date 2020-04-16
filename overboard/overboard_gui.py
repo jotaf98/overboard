@@ -54,9 +54,10 @@ def main():
   window.experiments = experiments
 
   # create timer for updating the current visualizations (TODO: multi-threading)
-  vis_timer = QtCore.QTimer()
-  vis_timer.timeout.connect(visualizations.update)
-  vis_timer.start(args.refresh_vis * 1000)
+  if args.refresh_vis > 0:
+    vis_timer = QtCore.QTimer()
+    vis_timer.timeout.connect(visualizations.update)
+    vis_timer.start(args.refresh_vis * 1000)
 
   window.show()
   
