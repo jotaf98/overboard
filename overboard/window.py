@@ -168,6 +168,7 @@ class Window(QtWidgets.QMainWindow):
 
     table.itemSelectionChanged.connect(self.on_table_select)
     table.mousePressEvent = self.on_table_click
+    table.contextMenuEvent = self.on_table_context_menu
 
     self.table = table
     self.selected_exp = (None, None)
@@ -195,6 +196,8 @@ class Window(QtWidgets.QMainWindow):
     # window size and title
     self.resize(screen_size.width() * 0.6, screen_size.height() * 0.95)
     self.setWindowTitle('OverBoard - ' + args.folder)
+
+    self.clipboard = QtGui.QApplication.clipboard()
 
     # compile loaded filter
     self.on_filter_ready()
@@ -477,6 +480,25 @@ class Window(QtWidgets.QMainWindow):
     """Clear selection on click (before selecting a row), to allow de-selecting by clicking outside table items"""
     self.table.clearSelection()
     QtGui.QTableWidget.mousePressEvent(self.table, event)
+  
+  def on_table_context_menu(self, event):
+    """Show menu when right-clicking a cell in the table"""
+    # get the selected row and column
+    row = self.table.rowAt(event.pos().y())
+    col = self.table.columnAt(event.pos().x())
+
+    action = QtGui.QAction('Copy', self)
+    action.triggered.connect(lambda: self.copy_cell(row, col))
+    
+    self.menu = QtGui.QMenu(self)
+    self.menu.addAction(action)
+    self.menu.popup(QtGui.QCursor.pos())
+
+  def copy_cell(self, row, col):
+    """Copy a table cell to the clibpard (called via the context menu)"""
+    cell = self.table.item(row, col)
+    if cell:
+      self.clipboard.setText(cell.text())
 
   def select_experiment(self, exp=None, clicked_table=False):
     """Select an experiment in the table, highlighting it in the plots.
