@@ -199,6 +199,12 @@ class Window(QtWidgets.QMainWindow):
 
     self.clipboard = QtGui.QApplication.clipboard()
 
+    # load list of previously-hidden experiments. this is looked up when an experiment loads.
+    self.hidden_exp_paths = self.settings.value('hidden_exp_paths', None)
+    if self.hidden_exp_paths is None:
+      self.hidden_exp_paths = []
+    self.hidden_exp_paths = set(self.hidden_exp_paths)
+
     # compile loaded filter
     self.on_filter_ready()
 
@@ -664,6 +670,10 @@ class Window(QtWidgets.QMainWindow):
     m = self.filter_edit.completer().model()
     history = [m.data(m.index(i), 0) for i in range(min(50, m.rowCount()))]
     self.settings.setValue('filter_completer', history)
+
+    # save hidden status of individual experiments
+    hidden_exp_paths = [exp.directory for exp in self.experiments.exps.values() if not exp.visible]
+    self.settings.setValue('hidden_exp_paths', hidden_exp_paths)
 
     self.settings.sync()
     event.accept()

@@ -99,7 +99,13 @@ class Experiment():
     self.data = []  # data for each metric (one list per metric)
     self.done = False  # true after reading and the experiment is done writing too
 
-    self.visible = True
+    # start hidden if the user hid it the last time (this is a persistent setting)
+    if directory in window.hidden_exp_paths:
+      self.visible = False
+      window.hidden_exp_paths.remove(directory)
+    else:
+      self.visible = True
+
     self.is_selected = False
     self.is_filtered = False
     self.style_idx = None  # style index, for when it's assigned (see Plots.assign_exp_style)
