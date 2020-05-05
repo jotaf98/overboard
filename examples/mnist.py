@@ -80,7 +80,6 @@ def test(args, model, device, test_loader, logger):
 def main():
   # Training settings
   parser = argparse.ArgumentParser()
-  parser.add_argument("experiment", nargs='?', default="")
   parser.add_argument('--batch-size', type=int, default=64, metavar='N',
             help='input batch size for training (default: 64)')
   parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
@@ -101,7 +100,6 @@ def main():
             help='output directory')
   args = parser.parse_args()
   use_cuda = not args.no_cuda and torch.cuda.is_available()
-  args.outputdir += '/' + args.experiment
 
   torch.manual_seed(args.seed)
 
