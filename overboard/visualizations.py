@@ -2,6 +2,7 @@
 import math, logging, os, runpy
 from collections import OrderedDict
 
+from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSlot, QTimer
 import PyQt5.QtWidgets as QtWidgets
 import pyqtgraph as pg
 
@@ -34,33 +35,32 @@ except:
 
 class Visualizations():
   # custom visualizations, supports both MatPlotLib (MPL) and PyQtGraph (PG) figures
-  def __init__(self, window, no_vis_snapshot, mpl_dpi):
+  def __init__(self, window, no_vis_snapshot, mpl_dpi, poll_time):
     self.window = window
     window.visualizations = self  # back-reference
 
     self.panels = OrderedDict()  # widgets containing plots, indexed by name
-    self.selected_exp = None  # selected experiment
     self.modules = {}  # loaded modules with visualization functions
-
-    self.vis_counts = OrderedDict()
-    self.last_size = None
 
     self.no_vis_snapshot = no_vis_snapshot
     if matplotlib is not None:
       matplotlib.rcParams['figure.dpi'] = mpl_dpi
+    
+    # create loader object and thread
+    self.loader = VisualizationsLoader(poll_time=poll_time)
+    self.thread = QThread()
 
-  def load_single_vis(self, exp, name):
-    # load a single visualization of the given experiment, with the given name.
-    # first, load function info and arguments from pickled file, to the CPU.
-    filename = exp.directory + '/' + name + '.pth'
-    try:
-      data = load(filename, map_location='cpu')
-    except Exception as err:
-      # ignore error about incomplete data, since file may still be written to; otherwise report it.
-      if not isinstance(err, RuntimeError) or 'storage has wrong size' not in str(err):
-        logging.exception("Error loading visualization data from " + filename)
-        return []
+    # connect VisualizationsLoader's signal to Visualizations method slot, to return new visualizations
+    self.loader.visualization_ready.connect(self.on_visualization_ready)
+    self.loader.moveToThread(self.thread)  # move the loader object to the thread
+    self.thread.start()  # start thread. note only select_folder will start the polling.
 
+
+  def render_visualization(self, directory, name, data):
+    """Render a visualization to a MatPlotLib or PyQtGraph figure, by calling a
+    custom function loaded from a pickle file"""
+
+    # visualization function info and arguments
     func_name = data['func']
     args = data['args']
     kwargs = data['kwargs']
@@ -72,7 +72,8 @@ class Visualizations():
     else:
       # custom visualization function. load the original source file or saved file
       # from the experiment directory, and call the specified function in it.
-      if not self.no_vis_snapshot: source_file = exp.directory + '/' + name + '.py'
+      if not self.no_vis_snapshot:
+        source_file = directory + '/' + name + '.py'
       panels = []
 
       try:
@@ -99,99 +100,70 @@ class Visualizations():
     if not isinstance(panels, list): panels = [panels]
     return panels
 
-  def update(self):
-    # called by a timer to check for updates. don't update if the experiment is finished.
-    if self.selected_exp is None or self.selected_exp.done: return
 
-    # see if the file size changed as a basic check
-    try:
-      new_size = os.path.getsize(self.selected_exp.directory + '/visualizations')
-    except FileNotFoundError:
-      return
-    if self.last_size is None:
-      self.last_size = new_size
+  def on_visualization_ready(self, directory, name, data):
+    """Called when an updated visualization (possibly new) has been
+    loaded for the current experiment"""
 
-    if new_size != self.last_size:
-      self.last_size = new_size
+    # render the MatPlotLib/PyQtGraph figures
+    new_plots = self.render_visualization(directory, name, data)
+    
+    # assign each plot to a new or reused panel.
+    # NOTE: most of this complicated logic is to deal with a specific MatPlotLib/
+    # FigureCanvas bug. we cannot delete a FigureCanvas and assign a new one to the
+    # same figure, or there are many graphical glitches (especially related to DPI).
+    # to avoid this, we reuse the same widget (actually the parent panel widget) for
+    # the same MatPlotLib figure every time (stored as overboard_panel attribute).
+    new_panels = []
+    old_panels = self.panels.get(name, [])
+    next_idx = 0  # next available panel to reuse
 
-      # load the list of visualizations and their refresh counts
-      vis_counts = self.read_vis_counts(self.selected_exp)
+    for plot in new_plots:
+      if type(plot).__name__ == 'Figure' and hasattr(plot, 'overboard_panel'):
+        # always reuse a previous panel for MPL figures
+        panel = self.window.add_panel(plot.overboard_panel, name, reuse=True)
+        panel.plot_widget.draw()  # ensure the figure is redrawn
+      else:
+        # not MPL, try to reuse a panel. first, skip over any existing MPL panels
+        while next_idx < len(old_panels) and old_panels[next_idx].is_mpl_figure:
+          next_idx += 1
+        
+        if next_idx < len(old_panels):
+          # we can reuse this one. it contains a pg.GraphicsLayoutWidget.
+          panel = old_panels[next_idx]
+          panel.plot_widget.clear()
+          panel.plot_widget.addItem(plot)
+          panel = self.window.add_panel(panel, name, reuse=True)
 
-      # check if any of them is new or its count changed
-      for (name, count) in vis_counts.items():
-        if name not in self.vis_counts or self.vis_counts[name] != count:
-          # load the new data
-          new_plots = self.load_single_vis(self.selected_exp, name)
-          
-          # assign each plot to a new or reused panel.
-          # NOTE: most of this complicated logic is to deal with a specific MatPlotLib/
-          # FigureCanvas bug. we cannot delete a FigureCanvas and assign a new one to the
-          # same figure, or there are many graphical glitches (especially related to DPI).
-          # to avoid this, we reuse the same widget (actually the parent panel widget) to
-          # the same MatPlotLib figure every time (stored as overboard_panel attribute).
-          new_panels = []
-          old_panels = self.panels.get(name, [])
-          next_idx = 0  # next available panel to reuse
-
-          for plot in new_plots:
-            if type(plot).__name__ == 'Figure' and hasattr(plot, 'overboard_panel'):
-              # always reuse a previous panel for MPL figures
-              panel = self.window.add_panel(plot.overboard_panel, name, reuse=True)
-              panel.plot_widget.draw()  # ensure the figure is redrawn
-            else:
-              # not MPL, try to reuse a panel. first, skip over any existing MPL panels
-              while next_idx < len(old_panels) and old_panels[next_idx].is_mpl_figure:
-                next_idx += 1
-              
-              if next_idx < len(old_panels):
-                # we can reuse this one. it contains a pg.GraphicsLayoutWidget.
-                panel = old_panels[next_idx]
-                panel.plot_widget.clear()
-                panel.plot_widget.addItem(plot)
-                panel = self.window.add_panel(panel, name, reuse=True)
-
-              else:
-                # create a new panel
-                panel = self.add_vis_panel(plot, name)
-            new_panels.append(panel)
-          
-          # remove any panels we did not reuse from the layout
-          self.delete_vis_panels(list(set(old_panels) - set(new_panels)))
-          self.panels[name] = new_panels
+        else:
+          # create a new panel
+          panel = self.add_vis_panel(plot, name)
+      new_panels.append(panel)
+    
+    # remove any panels we did not reuse from the layout
+    self.delete_vis_panels(list(set(old_panels) - set(new_panels)))
+    self.panels[name] = new_panels
 
   def select(self, exp):
-    # select a new experiment, showing its visualizations (and removing previously selected ones)
-    self.selected_exp = exp
-    self.modules = {}  # always reload modules when selecting, in case they're stale
-    new_panels = []
+    """Select a new experiment, showing its visualizations (and removing previously selected ones)"""
+    # start loading visualizations
     if exp is not None:
-      # load master list of visualizations (and their counts), then load each one
-      vis_counts = self.read_vis_counts(exp)
+      self.loader.select_folder(exp.directory, exp.done)
+    else:
+      self.loader.select_folder(None)
 
-      for name in vis_counts.keys():
-        # load data into plots, and turn them into visible panels
-        plots = self.load_single_vis(exp, name)
-        panels = [self.add_vis_panel(plot, name, add_to_layout=False) for plot in plots]
-        new_panels.append((name, panels))
-
-    new_panels = OrderedDict(new_panels)
-
-    # remove previous widgets (this is done after loading the visualizations to reduce delay)
+    # remove previous widgets
     self.delete_vis_panels(self.all_panels())
+    self.panels = {}
+    self.modules = {}  # always reload modules when selecting, in case they're stale
 
-    # add the new widgets to the flow layout, in order
-    self.panels = new_panels
-    for panel in self.all_panels():
-      self.window.flow_layout.addWidget(panel)
-
-    self.last_size = None
-
-  def all_panels(self):  # flatten nested list of panels
+  def all_panels(self):
+    """Flatten nested list of panels"""
     if len(self.panels) == 0: return []  # special case
     return [p for panels in self.panels.values() for p in panels]
     
   def add_vis_panel(self, plot, name, add_to_layout=True):
-    # wrap MatPlotLib figure or PyQtGraph PlotItem in a Qt widget
+    """Wrap MatPlotLib figure or PyQtGraph PlotItem in a Qt widget"""
     is_mpl_figure = (type(plot).__name__ == 'Figure')
     if is_mpl_figure:
       widget = FigureCanvas(plot)
@@ -209,25 +181,110 @@ class Visualizations():
     return panel
   
   def delete_vis_panels(self, panels):
-    # remove panels from the layout. MPL panels cannot be deleted, they need to
-    # be reused if the same figure is displayed. note self.panels is not updated.
+    """Remove panels from the layout"""
+    # MPL panels cannot be deleted, they need to be reused if the same figure is
+    # displayed. note self.panels is not updated.
     for panel in panels:
       panel.setParent(None)
       if not panel.is_mpl_figure:
         panel.deleteLater()
 
-  def read_vis_counts(self, exp):
-    # read and return visualizations list, including their update counts
-    vis_counts = OrderedDict()
-    try:
-      with open(exp.directory + '/visualizations', 'r') as file:
-        for line in file:
-          values = line.split('\t')
-          if len(values) == 2:
-            vis_counts[values[0]] = int(values[1])  # the format is: "name count\n"
-    except:
-      pass
-    return vis_counts
+
+class VisualizationsLoader(QObject):
+  """Waits for and loads new visualizations asynchronously, on a separate thread"""
+
+  # signal to return new visualizations to the Visualizations object, on the main thread
+  visualization_ready = pyqtSignal(str, str, dict)
+
+  def __init__(self, poll_time):
+    super().__init__()
+    self.poll_time = poll_time
+    self.select_folder(None)  # initialize attributes
+
+  @pyqtSlot()
+  def select_folder(self, folder, exp_done=False):
+    """Monitor a different folder (or None)"""
+
+    self.base_folder = folder
+    self.exp_done = exp_done
+    self.known_file_sizes = {}
+    self.files_iterator = None
+    self.retry_file = None
+    self.retry_dir = 0
+
+    if self.base_folder is not None:  # start polling for changes/loading visualizations
+      QTimer.singleShot(100, self.poll)
+
+  @pyqtSlot()
+  def poll(self):
+    """Check for new or updated visualizations.
+    Since the main use case involves remote files mounted with SSHFS/NFS, polling is
+    the only viable mechanism to detect changes. This is further argued here:
+    https://github.com/samuelcolvin/watchgod#why-no-inotify--kqueue--fsevent--winapi-support"""
+
+    if self.base_folder is None: return
+
+    # find files in the visualizations directory
+    directory = self.base_folder + '/visualizations'
+    if self.files_iterator is None:
+      try:
+        self.files_iterator = os.scandir(directory)
+      except NotADirectoryError:
+        # directory doesn't exist.
+        # backward compatibility: if this is a file instead of a
+        # directory (old format), the visualizations are stored in
+        # the parent folder. (could remove this code at a later time.)
+        if self.retry_dir == 0 and os.path.isfile(directory):
+          directory = self.base_folder
+          self.files_iterator = os.scandir(directory)
+        else:
+          # check back later (up to 3 times), in case they're being generated
+          self.retry_dir += 1
+          if self.retry_dir < 3:
+            QTimer.singleShot(self.poll_time * 1000, self.poll)
+          return
+
+    if self.retry_file:  # try the same file again if required
+      entry = self.retry_file
+      self.retry_file = None
+    else:
+      # get next file
+      try:
+        entry = next(self.files_iterator)
+      except StopIteration:
+        entry = None
+
+    # get pytorch pickle files
+    if entry and entry.name.endswith('.pth') and entry.is_file():
+      name = entry.name[:-4]  # remove extension
+      new_size = entry.stat().st_size
+
+      if new_size != self.known_file_sizes.get(name):
+        # new file or file size changed
+        self.known_file_sizes[name] = new_size
+
+        # load the file (asynchronously with the main thread)
+        try:
+          data = load(entry.path, map_location='cpu')
+
+          # send a signal with the results to the main thread
+          self.visualization_ready.emit(directory, name, data)
+
+        except Exception as err:
+          # ignore errors about incomplete data, since file may
+          # still be written to; otherwise log the error.
+          if isinstance(err, RuntimeError) and 'storage has wrong size' in str(err):
+            self.retry_file = entry  # try this file again later
+          else:
+            logging.exception("Error loading visualization data from " + entry.path)
+    
+    # wait a bit before checking next file, or a longer time if finished all files.
+    # if the experiment is done, don't check again at the end.
+    if entry:
+      QTimer.singleShot(100, self.poll)
+    elif not self.exp_done:
+      self.files_iterator = None  # check directory contents from scratch next time
+      QTimer.singleShot(self.poll_time * 1000, self.poll)
 
 
 tshow_images = []

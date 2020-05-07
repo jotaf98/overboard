@@ -49,15 +49,9 @@ def main():
   window = Window(args)
   experiments = Experiments(args.folder, window, args.force_reopen_files, args.refresh_plots, args.refresh_new)
   plots = Plots(window)
-  visualizations = Visualizations(window, args.no_vis_snapshot, args.mpl_dpi)
+  visualizations = Visualizations(window, args.no_vis_snapshot, args.mpl_dpi, args.refresh_vis)
 
   window.experiments = experiments
-
-  # create timer for updating the current visualizations (TODO: multi-threading)
-  if args.refresh_vis > 0:
-    vis_timer = QtCore.QTimer()
-    vis_timer.timeout.connect(visualizations.update)
-    vis_timer.start(args.refresh_vis * 1000)
 
   window.show()
   

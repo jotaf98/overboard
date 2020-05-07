@@ -39,7 +39,7 @@ class Experiments():
 class ExperimentsCrawler(QObject):
   """Searches for new experiments asynchronously, on a separate thread"""
 
-  # signal to return new experiments to the , on the main thread
+  # signal to return new experiments to the Experiments object, on the main thread
   experiments_ready = pyqtSignal(list)
 
   def __init__(self, base_folder, crawler_poll_time):

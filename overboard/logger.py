@@ -87,8 +87,7 @@ class Logger:
     self.save_timestamp = save_timestamp
 
     self.vis_functions = {}  # custom function associated with each visualization
-    self.vis_counts = {}  # number of times each visualization was updated
-    self.vis_padding = 0
+    self.vis_file_sizes = {}  # visualization file sizes, used to signal changes
 
     self.clock = -math.inf  # for rate_limit
 
@@ -223,6 +222,14 @@ class Logger:
     The function can draw any graphics and return them as a list of MatPlotLib Figure objects or PyQtGraph PlotItem objects.
     These will be shown when the experiment is selected in the GUI."""
 
+    # create folder 'visualizations' to store the files, if it doesn't exist
+    vis_dir = self.directory + '/visualizations'
+    try:  # compatibility. Python 3.5+ would use pathlib's mkdir with exist_ok=True
+      os.makedirs(vis_dir)
+    except OSError:
+      if not os.path.isdir(vis_dir):
+        raise
+
     if name in self.vis_functions:
       # reuse previously registered visualization function
       info = self.vis_functions[name]
@@ -242,29 +249,26 @@ class Logger:
         source_file = inspect.getsourcefile(func)  # python source for function
         if not source_file or func.__name__ == '<lambda>':
           raise ValueError("Only visualization functions defined at the top-level of a script are supported.")
-        shutil.copy(source_file, self.directory + '/' + name + '.py')
+        shutil.copy(source_file, vis_dir + '/' + name + '.py')
 
       # register visualization function for quick look-up next time this is called
       self.vis_functions[name] = {'func': func, 'source': source_file}
-      self.vis_counts[name] = 0
 
     # pickle the function and arguments
     func_name = func if isinstance(func, str) else func.__name__
+    filename = vis_dir + '/' + name + '.pth'
     data = {'func': func_name, 'source': source_file, 'args': args, 'kwargs': kwargs}
-    save(data, self.directory + '/' + name + '.pth')
-    
-    # update how many times this visualization was written, to signal a refresh in the GUI
-    self.vis_counts[name] += 1
-    with open(self.directory + '/visualizations', 'w') as file:
-      for (key, value) in self.vis_counts.items():
-        file.write('%s\t%i\n' % (key, value))
-      
-      # changes are detected based on file size (more reliable than file date across OS),
-      # so pad with a continually changing number of spaces. when some or all visualizations
-      # are updated in an iteration, the number of padding spaces will always be different.
-      self.vis_padding = self.vis_padding % (len(self.vis_counts) + 1) + 1
-      file.write(' ' * self.vis_padding)
-  
+    save(data, filename)
+
+    # changes are detected based on file size (more reliable than file date across OS),
+    # so pad with an extra 0-byte in case the file has the exact same size as before
+    size = os.path.getsize(filename)
+    if name in self.vis_file_sizes and size == self.vis_file_sizes[name]:
+      with open(filename, 'ab') as f:  # append the byte
+        f.write(bytes([0]))
+      size += 1
+    self.vis_file_sizes[name] = size
+
   def rate_limit(self, seconds, reset=False):
     """Returns true once every N seconds. Can be used to limit the rate of visualizations."""
     if not reset:

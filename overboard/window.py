@@ -233,7 +233,7 @@ class Window(QtWidgets.QMainWindow):
     panel.setFixedWidth(panel_size)
     panel.setFixedHeight(panel_size)
 
-    if add_to_layout:  # add to window's flow layout
+    if add_to_layout and not reuse:  # add to window's flow layout
       self.flow_layout.addWidget(panel)
 
     return panel
