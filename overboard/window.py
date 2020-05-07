@@ -645,8 +645,10 @@ class Window(QtWidgets.QMainWindow):
 
   def scroll_wheel_event(self, event):
     """Override QScrollArea wheelEvent, to prevent it from scrolling simultaneously with PyQtGraph's PlotItem"""
-    for panel in self.plots.panels.values():
-      if panel.plot_widget.underMouse():  # panel is under the mouse, so don't let QScrolArea scroll too
+    # if one of the panels/plots of the flow layout is under
+    # the mouse, don't let QScrolArea scroll too
+    for widget_item in self.flow_layout._items:
+      if widget_item.widget().underMouse():
         event.ignore()
         return
     QtWidgets.QScrollArea.wheelEvent(self.scroll_area, event)
