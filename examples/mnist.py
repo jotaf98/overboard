@@ -49,7 +49,7 @@ def train(args, model, device, train_loader, optimizer, epoch, logger):
     logger.update_average({'train.loss': loss.item(), 'train.accuracy': accuracy.item()})
     logger.print(prefix='train')
 
-    if logger.rate_limit(seconds=5):
+    if logger.rate_limit(seconds=10):
       # show the images once in a while
       logger.tensor('Images', data, grayscale=True)
 
