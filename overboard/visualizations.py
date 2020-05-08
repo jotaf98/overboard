@@ -33,9 +33,16 @@ except:
   matplotlib = None
 
 
-class Visualizations():
-  # custom visualizations, supports both MatPlotLib (MPL) and PyQtGraph (PG) figures
+class Visualizations(QObject):
+  """Custom visualizations, supports both MatPlotLib (MPL) and PyQtGraph (PG) figures"""
+
+  # signal to select a different folder for the VisualizationsLoader object,
+  # in a different thread
+  select_folder = pyqtSignal(str, bool)
+
   def __init__(self, window, no_vis_snapshot, mpl_dpi, poll_time):
+    super().__init__()
+
     self.window = window
     window.visualizations = self  # back-reference
 
@@ -55,6 +62,7 @@ class Visualizations():
     self.loader.moveToThread(self.thread)  # move the loader object to the thread
     self.thread.start()  # start thread. note only select_folder will start the polling.
 
+    self.select_folder.connect(self.loader.select_folder)
 
   def render_visualization(self, directory, name, data):
     """Render a visualization to a MatPlotLib or PyQtGraph figure, by calling a
@@ -148,9 +156,9 @@ class Visualizations():
     """Select a new experiment, showing its visualizations (and removing previously selected ones)"""
     # start loading visualizations
     if exp is not None:
-      self.loader.select_folder(exp.directory, exp.done)
+      self.select_folder.emit(exp.directory, exp.done)
     else:
-      self.loader.select_folder(None)
+      self.select_folder.emit('', False)
 
     # remove previous widgets
     self.delete_vis_panels(self.all_panels())
@@ -199,10 +207,10 @@ class VisualizationsLoader(QObject):
   def __init__(self, poll_time):
     super().__init__()
     self.poll_time = poll_time
-    self.select_folder(None)  # initialize attributes
+    self.timer = None
 
-  @pyqtSlot()
-  def select_folder(self, folder, exp_done=False):
+  @pyqtSlot(str, bool)
+  def select_folder(self, folder, exp_done):
     """Monitor a different folder (or None)"""
 
     self.base_folder = folder
@@ -212,8 +220,16 @@ class VisualizationsLoader(QObject):
     self.retry_file = None
     self.retry_dir = 0
 
+    if self.timer is None:
+      # create timer for the first time. note this must be done after
+      # the object was moved to the thread, not in the constructor.
+      self.timer = QTimer()
+      self.timer.timeout.connect(self.poll)
+      self.timer.setSingleShot(True)
+
+    self.timer.stop()  # reset timer
     if self.base_folder is not None:  # start polling for changes/loading visualizations
-      QTimer.singleShot(100, self.poll)
+      self.timer.start(100)
 
   @pyqtSlot()
   def poll(self):
@@ -222,7 +238,7 @@ class VisualizationsLoader(QObject):
     the only viable mechanism to detect changes. This is further argued here:
     https://github.com/samuelcolvin/watchgod#why-no-inotify--kqueue--fsevent--winapi-support"""
 
-    if self.base_folder is None: return
+    if not self.base_folder: return
 
     # find files in the visualizations directory
     directory = self.base_folder + '/visualizations'
@@ -281,10 +297,10 @@ class VisualizationsLoader(QObject):
     # wait a bit before checking next file, or a longer time if finished all files.
     # if the experiment is done, don't check again at the end.
     if entry:
-      QTimer.singleShot(100, self.poll)
+      self.timer.start(100)
     elif not self.exp_done:
       self.files_iterator = None  # check directory contents from scratch next time
-      QTimer.singleShot(self.poll_time * 1000, self.poll)
+      self.timer.start(self.poll_time * 1000)
 
 
 tshow_images = []
