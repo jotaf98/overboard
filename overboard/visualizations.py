@@ -245,7 +245,7 @@ class VisualizationsLoader(QObject):
     if self.files_iterator is None:
       try:
         self.files_iterator = os.scandir(directory)
-      except NotADirectoryError:
+      except (NotADirectoryError, FileNotFoundError):
         # directory doesn't exist.
         # backward compatibility: if this is a file instead of a
         # directory (old format), the visualizations are stored in
