@@ -102,7 +102,7 @@ class Experiment():
     # start hidden if the user hid it the last time (this is a persistent setting)
     if directory in window.hidden_exp_paths:
       self.visible = False
-      window.hidden_exp_paths.remove(directory)
+      del window.hidden_exp_paths[directory]
     else:
       self.visible = True
 

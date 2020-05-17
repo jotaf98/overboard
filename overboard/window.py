@@ -46,6 +46,7 @@ class Window(QtWidgets.QMainWindow):
     self.visualizations = None  # object that manages custom visualizations
     self.last_process_events = time()  # to update during heavy loads
     self.rebuilding_plots = False  # used by rebuild_plots
+    self.max_hidden_history = args.max_hidden_history
 
     # persistent settings
     self.settings = QtCore.QSettings('OverBoard', 'OverBoard')
@@ -199,11 +200,12 @@ class Window(QtWidgets.QMainWindow):
 
     self.clipboard = QtGui.QApplication.clipboard()
 
-    # load list of previously-hidden experiments. this is looked up when an experiment loads.
+    # load list of previously-hidden experiments. this is looked up when an
+    # experiment loads. use a dict to preserve order and have fast lookups.
     self.hidden_exp_paths = self.settings.value('hidden_exp_paths', None)
     if self.hidden_exp_paths is None:
       self.hidden_exp_paths = []
-    self.hidden_exp_paths = set(self.hidden_exp_paths)
+    self.hidden_exp_paths = {e: None for e in self.hidden_exp_paths}
 
     # compile loaded filter
     self.on_filter_ready()
@@ -673,9 +675,11 @@ class Window(QtWidgets.QMainWindow):
     history = [m.data(m.index(i), 0) for i in range(min(50, m.rowCount()))]
     self.settings.setValue('filter_completer', history)
 
-    # save hidden status of individual experiments
-    hidden_exp_paths = [exp.directory for exp in self.experiments.exps.values() if not exp.visible]
-    self.settings.setValue('hidden_exp_paths', hidden_exp_paths)
+    # save hidden status of individual experiments, preserving order
+    self.hidden_exp_paths.update({exp.directory: None for exp in self.experiments.exps.values() if not exp.visible})
+    if len(self.hidden_exp_paths) > self.max_hidden_history:  # keeping N last
+      self.hidden_exp_paths = list(self.hidden_exp_paths)[-self.max_hidden_history:]
+    self.settings.setValue('hidden_exp_paths', list(self.hidden_exp_paths))
 
     self.settings.sync()
     event.accept()

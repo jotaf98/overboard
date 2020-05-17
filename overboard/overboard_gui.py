@@ -29,6 +29,7 @@ def main():
   parser.add_argument("-refresh-new", default=11, type=int, help="Refresh interval for finding new experiments, in seconds.")
   parser.add_argument("-refresh-vis", default=10, type=int, help="Refresh interval for visualizations, in seconds.")
   parser.add_argument("--no-vis-snapshot", action='store_true', default=False, help="Visualizations are draw using a snapshot of the visualization function, saved with each experiment. This ensures visualizations from old experiments are maintained. Passing this option disables this behavior, which may be useful for debugging.")
+  parser.add_argument("-max-hidden-history", default=1000, type=int, help="Maximum number of hidden experiments to remember.")
   parser.add_argument("--debug", action='store_true', default=False, help="Does not suppress exceptions during operation, useful for debugging.")
   args = parser.parse_args()
 
