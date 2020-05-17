@@ -55,6 +55,8 @@ class Logger:
 
     if save_timestamp or unique: timestamp = get_timestamp()
     
+    directory = str(directory)  # Python 2 compatibility; should replace str with Path
+
     if unique:
       if resume: raise ValueError("Cannot create a unique directory and resume logging to it (`resume` and `unique` cannot both be True)")
 
