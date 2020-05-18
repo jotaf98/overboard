@@ -181,6 +181,7 @@ class ExperimentReader(QObject):
     """Do all the reading asynchronously from the main thread"""
 
     # read JSON file with metadata (including timestamp), if it exists
+    meta = {}
     try:
       with open(self.directory + '/meta.json', 'r') as file:
         meta = json.load(file)
