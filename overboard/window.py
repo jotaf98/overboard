@@ -101,12 +101,19 @@ class Window(QtWidgets.QMainWindow):
     self.merge_dropdown = self.create_dropdown(sidebar, label='Merge', default='Nothing',
       options=['Nothing'], setting_name='merge_dropdown', reset_style=True)
 
-    self.merge_line_dropdown = self.create_dropdown(sidebar, label='Merged line', default='Mean',
-      options=['Mean', 'Median'], setting_name='merge_line_dropdown')
+    (self.merge_line_dropdown, ml_label) = self.create_dropdown(sidebar,
+      label='Merged line', default='Mean', options=['Mean', 'Median'],
+      setting_name='merge_line_dropdown', return_label=True)
 
-    self.merge_shade_dropdown = self.create_dropdown(sidebar, label='Merged shade', default='2 x standard deviations',
-      options=['1 x standard deviation', '2 x standard deviations', '3 x standard deviations',
-      'Maximum and minimum'], setting_name='merge_shade_dropdown')
+    (self.merge_shade_dropdown, ms_label) = self.create_dropdown(sidebar,
+      label='Merged shade', default='2 x standard deviations',
+      options=[f"{i} x standard deviation" for i in range(1, 4)] + ['Maximum and minimum'], setting_name='merge_shade_dropdown', return_label=True)
+
+    # widgets to hide/show (merge options) depending on whether merging is on
+    self.merge_option_widgets = [ml_label, self.merge_line_dropdown,
+      ms_label, self.merge_shade_dropdown]
+    self.merge_dropdown.activated.connect(self.on_merge_dropdown_activated)
+    self.on_merge_dropdown_activated()  # merge options may start hidden
 
     # experiments filter text box
     rows = sidebar.rowCount()
@@ -244,10 +251,11 @@ class Window(QtWidgets.QMainWindow):
 
     return panel
   
-  def create_dropdown(self, sidebar, label, options, setting_name, default='', reset_style=False, checkable=False):
+  def create_dropdown(self, sidebar, label, options, setting_name, default='', reset_style=False, checkable=False, return_label=False):
     """Create a new dropdown menu, associated with a persistent setting"""
     rows = sidebar.rowCount()
-    sidebar.addWidget(QtWidgets.QLabel(label), rows, 0)
+    label = QtWidgets.QLabel(label)
+    sidebar.addWidget(label, rows, 0)
 
     if not checkable:
       dropdown = QtWidgets.QComboBox()
@@ -269,7 +277,7 @@ class Window(QtWidgets.QMainWindow):
       dropdown.view().clicked.connect(signal)
 
     sidebar.addWidget(dropdown, rows, 1)
-    return dropdown
+    return (dropdown if not return_label else (dropdown, label))
 
   def create_checkbox(self, sidebar, label, setting_name, default):
     """Create a new checkbox, associated with a persistent setting"""
@@ -666,6 +674,12 @@ class Window(QtWidgets.QMainWindow):
   
   #def smooth_slider_changed(self):
   #  self.smoother = Smoother(self.smooth_slider.value() / 4.0)
+
+  def on_merge_dropdown_activated(self):
+    """Show/hide other merge options depending on whether merging is on"""
+    visibility = (self.merge_dropdown.currentText() != 'Nothing')
+    for widget in self.merge_option_widgets:
+      widget.setVisible(visibility)
 
   def scroll_wheel_event(self, event):
     """Override QScrollArea wheelEvent, to prevent it from scrolling simultaneously with PyQtGraph's PlotItem"""
