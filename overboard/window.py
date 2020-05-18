@@ -88,6 +88,10 @@ class Window(QtWidgets.QMainWindow):
     self.y_categorical_checkbox = self.create_checkbox(sidebar,
       label='Treat Y as categorical', default=False, setting_name='y_categorical_checkbox')
 
+    self.metrics_subset_dropdown = self.create_dropdown(sidebar,
+      label='Metrics subset', options=[],
+      setting_name='metrics_subset_dropdown', checkable=True)
+
     self.panel_dropdown = self.create_dropdown(sidebar, label='Panels', default='One per metric',
       options=['Single panel', 'One per metric', 'One per run'], setting_name='panel_dropdown')
 
@@ -240,15 +244,30 @@ class Window(QtWidgets.QMainWindow):
 
     return panel
   
-  def create_dropdown(self, sidebar, label, options, setting_name, default, reset_style=False):
+  def create_dropdown(self, sidebar, label, options, setting_name, default='', reset_style=False, checkable=False):
     """Create a new dropdown menu, associated with a persistent setting"""
     rows = sidebar.rowCount()
     sidebar.addWidget(QtWidgets.QLabel(label), rows, 0)
-    dropdown = QtWidgets.QComboBox()
-    for option in options:
+
+    if not checkable:
+      dropdown = QtWidgets.QComboBox()
+    else:
+      dropdown = CheckableComboBox()
+
+    for (idx, option) in enumerate(options):
       dropdown.addItem(option)
-    dropdown.setCurrentText(self.settings.value(setting_name, default, type=str))
-    dropdown.activated.connect(partial(self.rebuild_plots, reset_style=reset_style))
+
+    if not checkable:
+      default = self.settings.value(setting_name, default, type=str)
+      if default:
+        dropdown.setCurrentText(default)
+    
+    signal = partial(self.rebuild_plots, reset_style=reset_style)
+    if not checkable:
+      dropdown.activated.connect(signal)
+    else:
+      dropdown.view().clicked.connect(signal)
+
     sidebar.addWidget(dropdown, rows, 1)
     return dropdown
 
@@ -393,11 +412,14 @@ class Window(QtWidgets.QMainWindow):
   def on_exp_header_ready(self, exp):
     """Called by Experiment when the header data (metrics/column names) has been read"""
     # update dropdown lists to include all metric names
+    unchecked = self.settings.value('metrics_subset_dropdown', [])
     for name in exp.metrics:
       if self.x_dropdown.findText(name) < 0:
         self.x_dropdown.addItem(name)
       if self.y_dropdown.findText(name) < 0:
         self.y_dropdown.addItem(name)
+      if self.metrics_subset_dropdown.findText(name) < 0:
+        self.metrics_subset_dropdown.addItem(name, checked=name not in unchecked)
 
   def rebuild_plots(self, reset_style=False):
     """Rebuild all plots (e.g. when plot options such as x/y axis change)"""
@@ -670,6 +692,14 @@ class Window(QtWidgets.QMainWindow):
 
     self.settings.setValue('filter_edit', self.filter_edit.text())
 
+    # save unchecked metric subset, up to 50 entries
+    checked_subset = set(self.metrics_subset_dropdown.get_checked_list())
+    unchecked_subset = {m: None for m in self.settings.value('metrics_subset_dropdown') if m not in checked_subset}  # previously hidden but now checked again
+    unchecked_subset.update({m: None for m in self.metrics_subset_dropdown.get_checked_list(unchecked=True)})  # merge with newly hidden
+    if len(unchecked_subset) > 50:  # keep N last
+      unchecked_subset = list(unchecked_subset)[-50:]
+    self.settings.setValue('metrics_subset_dropdown', list(unchecked_subset))
+
     # save auto-complete model for filter, up to 50 entries
     m = self.filter_edit.completer().model()
     history = [m.data(m.index(i), 0) for i in range(min(50, m.rowCount()))]
@@ -694,6 +724,45 @@ class SortableTableItem(QtWidgets.QTableWidgetItem):
 
   def __lt__(self, other):
     return (self.data(table_data_order)() < other.data(table_data_order)())
+
+
+class CheckableComboBox(QtGui.QComboBox):
+  """Drop-down list with checkable items"""
+  def __init__(self, parent=None):
+    super().__init__(parent)    
+    self.setItemDelegate(CheckBoxDelegate())
+    self.setModel(QtGui.QStandardItemModel(self))
+    self.setEditable(True)
+    self.view().clicked.connect(self.refresh_text)
+
+  def addItem(self, text, checked=False):
+    super().addItem(text)
+    item = self.model().item(self.count() - 1)
+    item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+    item.setCheckState(Qt.Checked if checked else Qt.Unchecked)
+    self.refresh_text()
+
+  def refresh_text(self, item=None):
+    """Shows the checked items as a comma-separated list in the QComboBox"""
+    # setCurrentText doesn't work for non-editable QComboBox, so do this
+    line = self.lineEdit()
+    line.setText(', '.join(self.get_checked_list()))
+    line.setReadOnly(True)
+    line.setCursorPosition(0)
+  
+  def get_checked_list(self, unchecked=False):
+    """Return a list of strings containing the checked items"""
+    model = self.model()
+    items = [model.item(i) for i in range(model.rowCount())]
+    state = (Qt.Unchecked if unchecked else Qt.Checked)
+    return [str(item.text()) for item in items if item.checkState() == state]
+    
+
+class CheckBoxDelegate(QtWidgets.QItemDelegate):
+  """Helper for drop-down list with checkable items"""
+  def createEditor(parent, op, idx):
+    self.editor = QCheckBox(parent)
+
 
 def create_scroller():
   scroll_area = QtWidgets.QScrollArea()

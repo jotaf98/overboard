@@ -2,6 +2,7 @@
 import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
 import PyQt5.QtGui as QtGui
+from PyQt5.QtCore import Qt
 
 # needed right after QT imports for high-DPI screens
 #QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
@@ -98,6 +99,7 @@ class Plots():
     y_option = self.window.y_dropdown.currentText()
     panel_option = self.window.panel_dropdown.currentText()
     merge_option = self.window.merge_dropdown.currentText()
+    metrics_subset = set(self.window.metrics_subset_dropdown.get_checked_list())
 
     # some combinations are invalid, change to sensible defaults in those cases
     if panel_option == "One per metric":
@@ -149,6 +151,9 @@ class Plots():
         else: x_relative = False
         if y == 'time (relative)': (y, y_relative) = ('time', True)
         else: y_relative = False
+
+        # skip if not part of the subset
+        if x not in metrics_subset or y not in metrics_subset: continue
 
         # a plot with the same values on X and Y is redundant, so skip it
         if x == y: continue
@@ -661,7 +666,10 @@ class Plots():
       del self.autorange_panels[panel]
 
       view = panel.plot_widget.getPlotItem().getViewBox()
-      view.enableAutoRange(x=state[0], y=state[1])
+      try:
+        view.enableAutoRange(x=state[0], y=state[1])
+      except RuntimeError:  # sometimes the object was deleted in the meanwhile
+        pass
 
 
 class Smoother():
