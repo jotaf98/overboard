@@ -54,15 +54,17 @@ class Visualizations(QObject):
       matplotlib.rcParams['figure.dpi'] = mpl_dpi
     
     # create loader object and thread
-    self.loader = VisualizationsLoader(poll_time=poll_time)
-    self.thread = QThread()
+    if poll_time > 0:
+      self.loader = VisualizationsLoader(poll_time=poll_time)
+      self.thread = QThread()
 
-    # connect VisualizationsLoader's signal to Visualizations method slot, to return new visualizations
-    self.loader.visualization_ready.connect(self.on_visualization_ready)
-    self.loader.moveToThread(self.thread)  # move the loader object to the thread
-    self.thread.start()  # start thread. note only select_folder will start the polling.
+      # connect VisualizationsLoader's signal to Visualizations method slot,
+      # to return new visualizations
+      self.loader.visualization_ready.connect(self.on_visualization_ready)
+      self.loader.moveToThread(self.thread)  # move the loader object to the thread
+      self.thread.start()  # start thread. note only select_folder will start the polling.
 
-    self.select_folder.connect(self.loader.select_folder)
+      self.select_folder.connect(self.loader.select_folder)
 
   def render_visualization(self, directory, name, data):
     """Render a visualization to a MatPlotLib or PyQtGraph figure, by calling a
