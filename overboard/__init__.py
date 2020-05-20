@@ -1,7 +1,7 @@
 
 # expose logger on import
 
-from .logger import Logger, get_timestamp
+from .logger import Logger, get_timestamp, get_timestamp_folder
 
 # expose tshow utility function, unless PyQt5 is not found
 
