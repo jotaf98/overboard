@@ -141,8 +141,7 @@ class Logger:
     if points is None:
       # use computed average, and reset accumulator
       points = self.average()
-      self.avg_accum = {}
-      self.avg_count = {}
+      self.reset_average()
     else:
       for value in points.values():
         if not isinstance(value, Number):
@@ -193,6 +192,11 @@ class Logger:
     """Return the average value of each stat so far (see update_average)."""
     return {name: self.avg_accum[name] / self.avg_count[name] for name in self.avg_accum.keys()}
 
+  def reset_average(self):
+    """Reset the running average estimates (see update_average)."""
+    self.avg_accum = {}
+    self.avg_count = {}
+    
   def print(self, points=None, prefix=None, as_string=False, line_prefix='', line_suffix=''):
     """Print the current stats averages to the console, or the given values, nicely formatted.
     If prefix is given, only stat names beginning with it will be printed (e.g. "train" or "val")."""
