@@ -743,9 +743,7 @@ class SortableTableItem(QtWidgets.QTableWidgetItem):
 class CheckableComboBox(QtGui.QComboBox):
   """Drop-down list with checkable items"""
   def __init__(self, parent=None):
-    super().__init__(parent)    
-    self.setItemDelegate(CheckBoxDelegate())
-    self.setModel(QtGui.QStandardItemModel(self))
+    super().__init__(parent)
     self.setEditable(True)
     self.view().clicked.connect(self.refresh_text)
 
@@ -770,12 +768,6 @@ class CheckableComboBox(QtGui.QComboBox):
     items = [model.item(i) for i in range(model.rowCount())]
     state = (Qt.Unchecked if unchecked else Qt.Checked)
     return [str(item.text()) for item in items if item.checkState() == state]
-    
-
-class CheckBoxDelegate(QtWidgets.QItemDelegate):
-  """Helper for drop-down list with checkable items"""
-  def createEditor(parent, op, idx):
-    self.editor = QCheckBox(parent)
 
 
 def create_scroller():
