@@ -224,7 +224,7 @@ class Window(QtWidgets.QMainWindow):
   def process_events_if_needed(self):
     """Process events if enough time has passed, to keep the GUI
     responsive during potentially heavy operations in the main thread"""
-    if time() - self.last_process_events > 0.5:  # limit to once every 0.5 seconds      
+    if time() - self.last_process_events > 0.5:  # limit to once every 0.5 seconds
       QtWidgets.QApplication.processEvents()
       self.last_process_events = time()
 
@@ -384,7 +384,7 @@ class Window(QtWidgets.QMainWindow):
         if arg_name not in table_col_by_name:  # a new argument name, add a column
           col = table.columnCount()
           table.setColumnCount(col + 1)
-          table.setHorizontalHeaderItem(col, QtWidgets.QTableWidgetItem(arg_name))  #, QtWidgets.QTableWidgetItem.Type
+          table.setHorizontalHeaderItem(col, QtWidgets.QTableWidgetItem(arg_name))  # , QtWidgets.QTableWidgetItem.Type
           table_col_by_name[arg_name] = col
           added_columns = True
         else:
@@ -492,7 +492,7 @@ class Window(QtWidgets.QMainWindow):
     """Toggle visibility of a given experiment, when the
     icon (first column of table) is clicked"""
 
-    if exp.is_filtered: return  # shouldn't happen    
+    if exp.is_filtered: return  # shouldn't happen
     if exp.visible:
       # remove all associated plots, and reset the experiment style so it can be used by others
       exp.visible = False
@@ -793,6 +793,8 @@ def set_style(app):
   app.setStyle("Fusion")
 
   directory = os.path.dirname(os.path.realpath(__file__))
+
+  QtGui.QFontDatabase.addApplicationFont(directory + './assets/OpenSans-Regular.ttf')
   
   with open(directory + '/style.qss', 'r') as file:
     app.setStyleSheet(file.read())

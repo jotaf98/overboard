@@ -3,7 +3,7 @@
 
 QWidget {
 	background: white;
-	font-family: sans-serif;
+	font-family: OpenSans;
 	font-size: 18px;
 }
 
