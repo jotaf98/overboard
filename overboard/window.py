@@ -175,7 +175,7 @@ class Window(QtWidgets.QMainWindow):
     header.setStretchLastSection(True)
     header.setDefaultAlignment(Qt.AlignLeft)
     header.setSectionsMovable(True)
-    header.setTextElideMode(Qt.ElideRight)  # show ellipsis for cut-off headers
+    #header.setTextElideMode(Qt.ElideRight)  # show ellipsis for cut-off headers. note: takes too much space.
     header.setHighlightSections(False)  # no bold header when cells are clicked
 
     table.itemSelectionChanged.connect(self.on_table_select)

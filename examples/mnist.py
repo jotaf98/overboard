@@ -2,7 +2,7 @@
 # Modified version of the PyTorch MNIST example to log outputs for OverBoard
 
 from __future__ import print_function
-import argparse, sys
+import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
