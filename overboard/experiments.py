@@ -156,6 +156,10 @@ class Experiment():
     # mark experiment as done. this signal is also sent to the QThread's quit slot, so it ends.
     self.done = True
 
+  def is_visible(self):
+    # helper for whether it's visible and not filtered out
+    return (self.visible and not self.is_filtered)
+
 
 
 class ExperimentReader(QObject):

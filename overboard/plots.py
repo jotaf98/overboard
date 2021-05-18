@@ -176,7 +176,7 @@ class Plots():
     """Creates or updates plots associated with given experiment, creating panels if needed.
     If the experiment is marked as invisible/filtered, nothing will be drawn."""
 
-    if not exp.visible or exp.is_filtered or len(exp.metrics) == 0:
+    if not exp.is_visible() or len(exp.metrics) == 0:
       return False  # plots are invisible or no data loaded yet
 
     plots = self.define_plots(exp)

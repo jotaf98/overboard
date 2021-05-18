@@ -47,6 +47,7 @@ class Window(QtWidgets.QMainWindow):
     self.last_process_events = time()  # to update during heavy loads
     self.rebuilding_plots = False  # used by rebuild_plots
     self.max_hidden_history = args.max_hidden_history
+    self.selected_first_exp = False  # select first experiment to load meta, for discoverability
 
     # persistent settings
     self.settings = QtCore.QSettings('OverBoard', 'OverBoard')
@@ -415,6 +416,11 @@ class Window(QtWidgets.QMainWindow):
     table.setSortingEnabled(True)
     table.sortItems(*prev_sort)
 
+    # select first visible experiment, for discoverability
+    if exp.is_visible() and not self.selected_first_exp:
+      self.selected_first_exp = True
+      self.select_experiment(exp)
+
     self.process_events_if_needed()
 
   def on_exp_header_ready(self, exp):
@@ -552,7 +558,7 @@ class Window(QtWidgets.QMainWindow):
       self.redraw_icon(old_exp, old_icon)
       self.plots.add(old_exp)  # update its view, in case it's visible
 
-    if exp and exp.visible:  # don't select if invisible
+    if exp and exp.is_visible():  # don't select if invisible
       icon = self.table.cellWidget(exp.table_row.row(), 0)
 
       exp.is_selected = True
@@ -639,7 +645,7 @@ class Window(QtWidgets.QMainWindow):
         return True
 
       # hide or show depending on context
-      was_hidden = (exp.is_filtered or not exp.visible)
+      was_hidden = not exp.is_visible()
       exp.is_filtered = hide  # will be checked by Plots.add
 
       self.table.setRowHidden(exp.table_row.row(), hide)
