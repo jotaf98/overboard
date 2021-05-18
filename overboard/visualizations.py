@@ -136,12 +136,10 @@ class Visualizations(QObject):
         if hasattr(plot, 'overboard_panel'):  # always reuse a previous panel
           panel = self.window.add_panel(plot.overboard_panel, name, reuse=True)
           panel.plot_widget.draw()  # ensure the figure is redrawn
-          print('MPL, reuse')
         else:  # it's new
           widget = FigureCanvas(plot)
           panel = self.window.add_panel(widget, name, add_to_layout=True)
           plot.overboard_panel = panel  # always associate the same panel with this figure
-          print('MPL, new')
 
       elif plot_type == 'PlotItem':  # PyQtGraph PlotItem
         if old_panels_pg:
@@ -150,12 +148,10 @@ class Visualizations(QObject):
           panel.plot_widget.clear()
           panel.plot_widget.addItem(plot)
           panel = self.window.add_panel(panel, name, reuse=True)
-          print('PG, reuse')
         else:  # it's new
           widget = pg.GraphicsLayoutWidget()
           widget.addItem(plot)
           panel = self.window.add_panel(widget, name, add_to_layout=True)
-          print('PG, new')
 
       elif plot_type == 'GLViewWidget':  # PyQtGraph GLViewWidget
         widget = plot
@@ -172,10 +168,8 @@ class Visualizations(QObject):
           # insert the new
           panel.plot_widget = widget
           panel.layout().addWidget(widget)
-          print('GL, reuse')
         else:  # it's new
           panel = self.window.add_panel(widget, name, add_to_layout=True)
-          print('GL, new')
 
       panel.plot_type = plot_type  # remember the plot type (regardless of nested widgets)
       new_panels.append(panel)
