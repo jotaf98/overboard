@@ -708,7 +708,8 @@ class Window(QtWidgets.QMainWindow):
 
     # save unchecked metric subset, up to 50 entries
     checked = set(self.metrics_subset_dropdown.get_checked_list())
-    unchecked = {m: None for m in self.settings.value('metrics_subset_dropdown') if m not in checked}  # previously hidden but now checked again
+    prev_unchecked = self.settings.value('metrics_subset_dropdown', [], type=list)  # previously hidden
+    unchecked = {m: None for m in prev_unchecked if m not in checked}  # previously hidden but now checked again
     unchecked.update({m: None for m in self.metrics_subset_dropdown.get_checked_list(unchecked=True)})  # merge with newly hidden
     if len(unchecked) > 50:  # keep N last
       unchecked = list(unchecked)[-50:]
