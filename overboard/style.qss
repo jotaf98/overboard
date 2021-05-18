@@ -61,19 +61,6 @@ QSlider::handle:horizontal {
 }*/
 
 
-/* for the frame and title around each panel */
-
-QGroupBox {
-	border: 0;
-	margin-top: 1.2ex;  /* create vertical margin to hold the title */
-}
-QGroupBox::title {
-	subcontrol-origin: margin;  /* place it inside the margin */
-	subcontrol-position: top center;  /* horizontally aligned and at the top */
-	padding: 0;
-}
-
-
 /* for the table */
 
 QHeaderView {

@@ -293,7 +293,7 @@ class Plots():
 
     # create new panel to contain plot
     title = plot['panel']
-    plot_widget = create_plot_widget(title)
+    plot_widget = create_plot_widget()
     panel = self.window.add_panel(plot_widget, title)
 
     plot_item = panel.plot_widget.getPlotItem()

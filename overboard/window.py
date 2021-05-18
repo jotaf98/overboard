@@ -231,16 +231,22 @@ class Window(QtWidgets.QMainWindow):
 
   def add_panel(self, widget, title, add_to_layout=True, reuse=False):
     # adds a panel to the FlowLayout (main plots display), containing a widget (e.g. FigureCanvas).
-    # first, create a QGroupBox around it, to show the title
+    # first, create a QtWidget+QVBoxLayout around it, to show the title
     if not reuse:
+      label = QtWidgets.QLabel(title)
+      label.setAlignment(Qt.AlignCenter)
+
       vbox = QtWidgets.QVBoxLayout()
+      vbox.addWidget(label)
       vbox.addWidget(widget)
-      panel = QtWidgets.QGroupBox(title)
+
+      panel = QtWidgets.QWidget()
       panel.setLayout(vbox)
       panel.plot_widget = widget  # keep a reference to the inner widget
+      panel.title_widget = label
     else:
       panel = widget  # reusing a previous panel (less common)
-      panel.setTitle(title)
+      panel.title_widget.setText(title)
     
     # set the size
     panel_size = self.size_slider.value()

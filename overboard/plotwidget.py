@@ -55,7 +55,7 @@ class FancyAxis(pg.AxisItem):
       p.drawText(rect, flags, text)
 
 
-def create_plot_widget(title):
+def create_plot_widget():
   # create our special axis. only one of them draws the background.
   axis = {'left': FancyAxis('left', backgroundColor=None), 'bottom': FancyAxis('bottom')}
   font = QtGui.QFont()
