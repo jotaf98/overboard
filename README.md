@@ -1,5 +1,5 @@
 # OverBoard
-OverBoard is a lightweight yet powerful dashboard to monitor your experiments. It includes:
+OverBoard is a lightweight yet powerful dashboard to monitor your experiments.
 
 <p align="center">
 <img align="center" alt="editor" src="https://raw.githubusercontent.com/jotaf98/overboard/master/demo.gif" />
