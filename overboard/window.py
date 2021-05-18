@@ -237,8 +237,8 @@ class Window(QtWidgets.QMainWindow):
       label.setAlignment(Qt.AlignCenter)
 
       vbox = QtWidgets.QVBoxLayout()
-      vbox.addWidget(label)
-      vbox.addWidget(widget)
+      vbox.addWidget(label, stretch=0)
+      vbox.addWidget(widget, stretch=1)
 
       panel = QtWidgets.QWidget()
       panel.setLayout(vbox)

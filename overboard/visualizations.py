@@ -138,7 +138,7 @@ class Visualizations(QObject):
           panel.plot_widget.draw()  # ensure the figure is redrawn
         else:  # it's new
           widget = FigureCanvas(plot)
-          panel = self.window.add_panel(widget, name, add_to_layout=True)
+          panel = self.window.add_panel(widget, name)
           plot.overboard_panel = panel  # always associate the same panel with this figure
 
       elif plot_type == 'PlotItem':  # PyQtGraph PlotItem
@@ -151,7 +151,7 @@ class Visualizations(QObject):
         else:  # it's new
           widget = pg.GraphicsLayoutWidget()
           widget.addItem(plot)
-          panel = self.window.add_panel(widget, name, add_to_layout=True)
+          panel = self.window.add_panel(widget, name)
 
       elif plot_type == 'GLViewWidget':  # PyQtGraph GLViewWidget
         widget = plot
@@ -167,9 +167,10 @@ class Visualizations(QObject):
 
           # insert the new
           panel.plot_widget = widget
-          panel.layout().addWidget(widget)
+          panel.layout().addWidget(widget, stretch=1)
+          panel = self.window.add_panel(panel, name, reuse=True)
         else:  # it's new
-          panel = self.window.add_panel(widget, name, add_to_layout=True)
+          panel = self.window.add_panel(widget, name)
 
       panel.plot_type = plot_type  # remember the plot type (regardless of nested widgets)
       new_panels.append(panel)
