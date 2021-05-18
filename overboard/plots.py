@@ -30,9 +30,10 @@ widths = [2, 1, 3]  # line widths
 
 
 class Plots():
-  def __init__(self, window):
+  def __init__(self, window, dashes):
     self.window = window
     window.plots = self  # back-reference
+    self.dashes = dashes  # option to cycle through dashes first instead of colors
 
     self.panels = {}  # widgets containing plots, indexed by name (usually the plot title at the top)
     self.hovered_plot_info = None
@@ -84,9 +85,15 @@ class Plots():
     idx = exp.style_idx
 
     # start by varying color, then dashes, then line width
-    color = palette[idx % len(palette)]
-    dash = dashes[(idx // len(palette)) % len(dashes)]
-    width = widths[(idx // (len(palette) * len(dashes))) % len(widths)]
+    if not self.dashes:
+      color = palette[idx % len(palette)]
+      dash = dashes[(idx // len(palette)) % len(dashes)]
+      width = widths[(idx // (len(palette) * len(dashes))) % len(widths)]
+    else:
+      # alternative order: dashes, width, color
+      dash = dashes[idx % len(dashes)]
+      width = widths[(idx // len(dashes)) % len(widths)]
+      color = palette[(idx // (len(dashes) * len(widths))) % len(palette)]
 
     return {'color': color, 'style': dash, 'width': width}
 

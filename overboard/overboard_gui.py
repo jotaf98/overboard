@@ -24,6 +24,7 @@ def main():
   parser.add_argument("folder", help="Root folder where experiments are found.")
   #parser.add_argument("-smoothen", default=0, type=float)
   parser.add_argument("-mpl-dpi", default=100, type=int, help="DPI setting for MatPlotLib plots, may be used if text is too big/small (useful for high-DPI monitors).")
+  parser.add_argument("--dashes", action='store_true', default=False, help="Cycle through dashes (line) style instead of colors, to distinguish plot lines.")
   parser.add_argument("--force-reopen-files", action='store_true', default=False, help="Slower but more reliable refresh method, useful for remote files.")
   parser.add_argument("-refresh-plots", default=3, type=int, help="Refresh interval for plot updates, in seconds.")
   parser.add_argument("-refresh-new", default=11, type=int, help="Refresh interval for finding new experiments, in seconds.")
@@ -49,7 +50,7 @@ def main():
   # create window, experiments and plots holders
   window = Window(args)
   experiments = Experiments(args.folder, window, args.force_reopen_files, args.refresh_plots, args.refresh_new)
-  plots = Plots(window)
+  plots = Plots(window, args.dashes)
   visualizations = Visualizations(window, args.no_vis_snapshot, args.mpl_dpi, args.refresh_vis)
 
   window.experiments = experiments
