@@ -1,23 +1,25 @@
 # OverBoard
-Pure Python dashboard for monitoring deep learning experiments (like TensorBoard for PyTorch/MXNet/etc, without a browser)
+OverBoard is a lightweight yet powerful dashboard to monitor your experiments. It includes:
 
 <p align="center">
 <img align="center" alt="editor" src="https://raw.githubusercontent.com/jotaf98/overboard/master/demo.gif" />
 </p>
 
+
 ## Features
 
-- Automatically discovers new experiments in a directory tree, and updates plots in real-time
+- A table of hyper-parameters with Python-syntax filtering
 
-- Fully responsive native app, no fiddly Python-Javascript bridge or browsers involved
+- Multiple views of the same data (i.e. custom X/Y axes)
 
-- Visualize tensors (activations, filters) interactively with the mouse (zoom/pan)
+- Hyper-parameter visualisation (i.e. bubble plots)
 
-- Fully customizable plots using MatPlotLib. See what your network is really up to!
+- Percentile intervals for multiple runs (i.e. shaded plots)
 
-- Fast logging and out-of-process drawing. Don't slow your training down to have fancy graphs
+- Custom visualisations (tensors and any custom plot with familiar MatPlotLib syntax)
 
-- Easy remote monitoring of experiments (e.g. in a cluster over SSH)
+- Fast client-side rendering (the training code is kept lightweight)
+
 
 ## Installation
 
@@ -31,12 +33,13 @@ The main dependencies are PyQt 5 and PyQtGraph. These can be installed as follow
 
 Finally, OverBoard itself can be installed with: `pip install overboard`
 
+
 ## Usage
 
 - Main interface: `python3 -m overboard <logs-directory>`
 
 - Logging experiments is simple:
-```
+```python
 from overboard import Logger
 
 with Logger('./logs') as logger:
@@ -49,6 +52,7 @@ See the `examples` directory for more details.
 - `examples/synthetic.py`: Generate some test logs.
 - `examples/mnist.py`: The mandatory MNIST example. Also includes custom MatPlotLib plots.
 
+
 ## Remote experiments
 
 The easiest way to monitor remote experiments is to mount their directory over SFTP, and point OverBoard to it.
@@ -56,6 +60,7 @@ The easiest way to monitor remote experiments is to mount their directory over S
 Tested with: [SSHFS](https://github.com/libfuse/sshfs) (Linux, available in most distros), [FUSE](https://osxfuse.github.io/) (Mac), [SFTP NetDrive](https://www.nsoftware.com/sftp/netdrive/) (Windows).
 
 Since most of these don't allow OverBoard to monitor log files with the default light-weight method, the plots may not update automatically; in that case use the command-line argument `--force-reopen-files`.
+
 
 ## Author
 
