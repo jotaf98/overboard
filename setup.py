@@ -1,12 +1,12 @@
 
 import setuptools
 
-with open("README.md", "r") as f:
+with open("README.md", "r", encoding="utf-8") as f:
   long_description = f.read()
 
 setuptools.setup(
   name="overboard",
-  version="0.5.0",
+  version="0.5.1",
   author="Joao Henriques",
   description="Pure Python dashboard for monitoring deep learning experiments",
   long_description=long_description,
