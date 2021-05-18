@@ -707,12 +707,12 @@ class Window(QtWidgets.QMainWindow):
     self.settings.setValue('filter_edit', self.filter_edit.text())
 
     # save unchecked metric subset, up to 50 entries
-    checked_subset = set(self.metrics_subset_dropdown.get_checked_list())
-    unchecked_subset = {m: None for m in self.settings.value('metrics_subset_dropdown') if m not in checked_subset}  # previously hidden but now checked again
-    unchecked_subset.update({m: None for m in self.metrics_subset_dropdown.get_checked_list(unchecked=True)})  # merge with newly hidden
-    if len(unchecked_subset) > 50:  # keep N last
-      unchecked_subset = list(unchecked_subset)[-50:]
-    self.settings.setValue('metrics_subset_dropdown', list(unchecked_subset))
+    checked = set(self.metrics_subset_dropdown.get_checked_list())
+    unchecked = {m: None for m in self.settings.value('metrics_subset_dropdown') if m not in checked}  # previously hidden but now checked again
+    unchecked.update({m: None for m in self.metrics_subset_dropdown.get_checked_list(unchecked=True)})  # merge with newly hidden
+    if len(unchecked) > 50:  # keep N last
+      unchecked = list(unchecked)[-50:]
+    self.settings.setValue('metrics_subset_dropdown', list(unchecked))
 
     # save auto-complete model for filter, up to 50 entries
     m = self.filter_edit.completer().model()
