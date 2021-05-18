@@ -224,8 +224,10 @@ class Logger:
     """Store a visualization to display in the OverBoard GUI.
     The first argument must be a function, with the signature:
       figures = func(name, *args, **kwargs)
-    where name is a unique name, and the following arguments/keyword arguments can be anything (e.g. tensors).
-    The function can draw any graphics and return them as a list of MatPlotLib Figure objects or PyQtGraph PlotItem objects.
+    where name is a unique name, and the following arguments/keyword arguments
+    can be anything (e.g. tensors).
+    The function can draw any graphics and return them as a list of MatPlotLib
+    Figure objects, or PyQtGraph PlotItem/GLViewWidget objects.
     These will be shown when the experiment is selected in the GUI."""
 
     # create folder 'visualizations' to store the files, if it doesn't exist

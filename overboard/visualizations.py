@@ -5,6 +5,7 @@ from collections import OrderedDict
 from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSlot, QTimer
 import PyQt5.QtWidgets as QtWidgets
 import pyqtgraph as pg
+import pyqtgraph.opengl as gl
 
 try:
   from torch import load
@@ -126,28 +127,57 @@ class Visualizations(QObject):
     # the same MatPlotLib figure every time (stored as overboard_panel attribute).
     new_panels = []
     old_panels = self.panels.get(name, [])
-    next_idx = 0  # next available panel to reuse
+    old_panels_pg = [p for p in old_panels if p.plot_type == 'PlotItem']
+    old_panels_gl = [p for p in old_panels if p.plot_type == 'GLViewWidget']
 
     for plot in new_plots:
-      if type(plot).__name__ == 'Figure' and hasattr(plot, 'overboard_panel'):
-        # always reuse a previous panel for MPL figures
-        panel = self.window.add_panel(plot.overboard_panel, name, reuse=True)
-        panel.plot_widget.draw()  # ensure the figure is redrawn
-      else:
-        # not MPL, try to reuse a panel. first, skip over any existing MPL panels
-        while next_idx < len(old_panels) and old_panels[next_idx].is_mpl_figure:
-          next_idx += 1
-        
-        if next_idx < len(old_panels):
-          # we can reuse this one. it contains a pg.GraphicsLayoutWidget.
-          panel = old_panels[next_idx]
+      plot_type = self.get_plot_type(plot)
+      if plot_type == 'Figure':  # MatPlotLib Figure
+        if hasattr(plot, 'overboard_panel'):  # always reuse a previous panel
+          panel = self.window.add_panel(plot.overboard_panel, name, reuse=True)
+          panel.plot_widget.draw()  # ensure the figure is redrawn
+          print('MPL, reuse')
+        else:  # it's new
+          widget = FigureCanvas(plot)
+          panel = self.window.add_panel(widget, name, add_to_layout=True)
+          plot.overboard_panel = panel  # always associate the same panel with this figure
+          print('MPL, new')
+
+      elif plot_type == 'PlotItem':  # PyQtGraph PlotItem
+        if old_panels_pg:
+          # we can reuse an old panel and the pg.GraphicsLayoutWidget that it contains
+          panel = old_panels_pg.pop()
           panel.plot_widget.clear()
           panel.plot_widget.addItem(plot)
           panel = self.window.add_panel(panel, name, reuse=True)
+          print('PG, reuse')
+        else:  # it's new
+          widget = pg.GraphicsLayoutWidget()
+          widget.addItem(plot)
+          panel = self.window.add_panel(widget, name, add_to_layout=True)
+          print('PG, new')
 
-        else:
-          # create a new panel
-          panel = self.add_vis_panel(plot, name)
+      elif plot_type == 'GLViewWidget':  # PyQtGraph GLViewWidget
+        widget = plot
+        if old_panels_gl:
+          # we can reuse an old panel, but assign the new GLViewWidget to it
+          panel = old_panels_gl.pop()
+
+          # remove the old one
+          panel.plot_widget.setParent(None)
+          panel.layout().removeWidget(panel.plot_widget)
+          if panel.plot_widget is not widget:  # don't delete if the same widget was returned by the user's custom function
+            panel.plot_widget.deleteLater()
+
+          # insert the new
+          panel.plot_widget = widget
+          panel.layout().addWidget(widget)
+          print('GL, reuse')
+        else:  # it's new
+          panel = self.window.add_panel(widget, name, add_to_layout=True)
+          print('GL, new')
+
+      panel.plot_type = plot_type  # remember the plot type (regardless of nested widgets)
       new_panels.append(panel)
     
     # remove any panels we did not reuse from the layout
@@ -172,32 +202,27 @@ class Visualizations(QObject):
     if len(self.panels) == 0: return []  # special case
     return [p for panels in self.panels.values() for p in panels]
     
-  def add_vis_panel(self, plot, name, add_to_layout=True):
-    """Wrap MatPlotLib figure or PyQtGraph PlotItem in a Qt widget"""
-    is_mpl_figure = (type(plot).__name__ == 'Figure')
-    if is_mpl_figure:
-      widget = FigureCanvas(plot)
-    else:
-      widget = pg.GraphicsLayoutWidget()
-      widget.addItem(plot)
-
-    # wrap that in a panel with title
-    panel = self.window.add_panel(widget, name, add_to_layout=add_to_layout)
-
-    panel.is_mpl_figure = is_mpl_figure
-    if is_mpl_figure:
-      plot.overboard_panel = panel  # always associate the same panel with this figure
-
-    return panel
-  
   def delete_vis_panels(self, panels):
     """Remove panels from the layout"""
-    # MPL panels cannot be deleted, they need to be reused if the same figure is
+    # MatPlotLib panels cannot be deleted, they need to be reused if the same figure is
     # displayed. note self.panels is not updated.
     for panel in panels:
       panel.setParent(None)
-      if not panel.is_mpl_figure:
+      if panel.plot_type != 'Figure':
         panel.deleteLater()
+
+  def get_plot_type(self, plot):
+    """Return the class name of a plot type (Figure, PlotItem or GLViewWidget).
+    Throw an error if the type is not valid."""
+    if type(plot).__name__ == 'Figure':
+      return 'Figure'
+    if isinstance(plot, pg.PlotItem):
+      return 'PlotItem'
+    if isinstance(plot, gl.GLViewWidget):
+      return 'GLViewWidget'
+    raise TypeError("Visualization functions (Logger.visualize) should return a list of"
+      "MatPlotLib Figure, PyQtGraph PlotItem, or PyQtGraph GLViewWidget. A plot with "
+      "class " + type(plot).__name__ + " was found.")
 
 
 class VisualizationsLoader(QObject):
