@@ -61,6 +61,8 @@ Tested with: [SSHFS](https://github.com/libfuse/sshfs) (Linux, available in most
 
 Since most of these don't allow OverBoard to monitor log files with the default light-weight method, the plots may not update automatically; in that case use the command-line argument `--force-reopen-files`.
 
+Depending on the remote server's configuration (e.g. firewall settings), you might need to use a VPN to tunnel to the server's network, to ensure that the right ports are not blocked to you (i.e. having SSH access does not guarantee SFTP access from an external network).
+
 
 ## Author
 
