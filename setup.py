@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setuptools.setup(
   name="overboard",
-  version="0.5.1",
+  version="0.6.0",
   author="Joao Henriques",
   description="Pure Python dashboard for monitoring deep learning experiments",
   long_description=long_description,
