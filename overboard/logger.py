@@ -10,7 +10,7 @@ except ImportError:
   import pickle
   def save(obj, path):
     with open(path, 'wb') as file:
-      pickle.dump(obj, file, pickle.HIGHEST_PROTOCOL)
+      pickle.dump(obj, file)
 
 
 def get_timestamp(microseconds=True):
@@ -50,6 +50,7 @@ class Logger:
   stat_names: list of str [automatic]
     Defines the column names (metrics) written to the "stats.csv" file. Otherwise, they are set automatically when Logger.append is called for the first time, and cannot be changed later. This argument is useful if you want to define a larger set of columns than those written in the first call to Logger.append."""
 
+    self.file = None
     if stat_names and not (all(isinstance(name, str) and not ',' in name for name in stat_names)):
       raise ValueError("stat_names must be a list of strings with no commas, if specified.")
 

@@ -12,9 +12,9 @@ try:
 except ImportError:
   # fallback to regular pickle if pytorch not installed
   import pickle
-  def load(path):
+  def load(path, map_location=None):
     with open(path, 'rb') as file:
-      pickle.load(file)
+      return pickle.load(file)
 
 try:
   from torchvision.utils import make_grid
@@ -304,6 +304,8 @@ class VisualizationsLoader(QObject):
         # load the file (asynchronously with the main thread)
         try:
           data = load(entry.path, map_location='cpu')
+          if not isinstance(data, dict) or 'func' not in data:
+            raise OSError("Attempted to load a visualization saved with a different protocol version (saving with PyTorch and loading without it is not supported, and vice-versa).")
 
           # send a signal with the results to the main thread
           self.visualization_ready.emit(directory, name, data)
