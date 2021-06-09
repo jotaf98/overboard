@@ -250,8 +250,7 @@ class Window(QtWidgets.QMainWindow):
     
     # set the size
     panel_size = self.size_slider.value()
-    panel.setFixedWidth(panel_size)
-    panel.setFixedHeight(panel_size)
+    panel.setFixedSize(panel_size, panel_size)
 
     if add_to_layout and not reuse:  # add to window's flow layout
       self.flow_layout.addWidget(panel)
@@ -677,12 +676,10 @@ class Window(QtWidgets.QMainWindow):
     """Resize panels for plots and visualizations"""
     panel_size = self.size_slider.value()
     for panel in self.plots.panels.values():
-      panel.setFixedWidth(panel_size)
-      panel.setFixedHeight(panel_size)
+      panel.setFixedSize(panel_size, panel_size)
     for panel_group in self.visualizations.panels.values():
       for panel in panel_group:
-        panel.setFixedWidth(panel_size)
-        panel.setFixedHeight(panel_size)
+        panel.setFixedSize(panel_size, panel_size)
   
   #def smooth_slider_changed(self):
   #  self.smoother = Smoother(self.smooth_slider.value() / 4.0)
