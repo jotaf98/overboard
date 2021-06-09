@@ -172,6 +172,8 @@ class Visualizations(QObject):
         else:  # it's new
           panel = self.window.add_panel(widget, name)
 
+        plot.show()  # ensure the OpenGL plot is updated
+
       panel.plot_type = plot_type  # remember the plot type (regardless of nested widgets)
       new_panels.append(panel)
     
