@@ -1,14 +1,10 @@
 
-import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
-import PyQt5.QtGui as QtGui
-from PyQt5.QtCore import Qt
 
 # needed right after QT imports for high-DPI screens
 #QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
 #QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
 
-from itertools import product, cycle, count
 from functools import partial
 import heapq, logging
 from datetime import datetime

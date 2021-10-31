@@ -27,9 +27,11 @@ The main OverBoard GUI uses Python 3; however, experiments can be logged from bo
 
 The main dependencies are PyQt 5 and PyQtGraph. These can be installed as follows:
 
-- With Conda: `conda install pyqt pyqtgraph -c anaconda`
+- With Conda: `conda install pyqt=5.12 pyqtgraph=0.12 -c conda-forge`
 
-- With pip: `pip install pyqt5 pyqtgraph`
+- With pip: `pip install pyqt5==5.12 pyqtgraph==0.12`
+
+If you intend to use PyQtGraph's 3D plots, add PyOpenGL 3.1 to the lists above.
 
 Finally, OverBoard itself can be installed with: `pip install overboard`
 

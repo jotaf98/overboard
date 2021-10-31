@@ -210,7 +210,7 @@ class Window(QtWidgets.QMainWindow):
     self.resize(screen_size.width() * 0.6, screen_size.height() * 0.95)
     self.setWindowTitle('OverBoard - ' + args.folder)
 
-    self.clipboard = QtGui.QApplication.clipboard()
+    self.clipboard = QtWidgets.QApplication.clipboard()
 
     # load list of previously-hidden experiments. this is looked up when an
     # experiment loads. use a dict to preserve order and have fast lookups.
@@ -315,7 +315,7 @@ class Window(QtWidgets.QMainWindow):
     # create icon (empty label with writable pixmap)
     size = table.rowHeight(row)
     pixmap = QtGui.QPixmap(size, size)  # make it square
-    icon = QtGui.QLabel()
+    icon = QtWidgets.QLabel()
     icon.setPixmap(pixmap)
     icon.setFixedWidth(size)
     icon.mousePressEvent = lambda _: self.on_icon_click(icon, exp)
@@ -528,7 +528,7 @@ class Window(QtWidgets.QMainWindow):
   def on_table_click(self, event):
     """Clear selection on click (before selecting a row), to allow de-selecting by clicking outside table items"""
     self.table.clearSelection()
-    QtGui.QTableWidget.mousePressEvent(self.table, event)
+    QtWidgets.QTableWidget.mousePressEvent(self.table, event)
   
   def on_table_context_menu(self, event):
     """Show menu when right-clicking a cell in the table"""
@@ -536,10 +536,10 @@ class Window(QtWidgets.QMainWindow):
     row = self.table.rowAt(event.pos().y())
     col = self.table.columnAt(event.pos().x())
 
-    action = QtGui.QAction('Copy', self)
+    action = QtWidgets.QAction('Copy', self)
     action.triggered.connect(lambda: self.copy_cell(row, col))
     
-    self.menu = QtGui.QMenu(self)
+    self.menu = QtWidgets.QMenu(self)
     self.menu.addAction(action)
     self.menu.popup(QtGui.QCursor.pos())
 
@@ -664,7 +664,7 @@ class Window(QtWidgets.QMainWindow):
   def show_filter_error(self, err):
     """Show filter expression error as a tooltip, and change color to red"""
     text = err.__class__.__name__ + ": " + str(err)
-    QtGui.QToolTip.showText(QtGui.QCursor.pos(), text, self.filter_edit)
+    QtWidgets.QToolTip.showText(QtGui.QCursor.pos(), text, self.filter_edit)
     self.filter_edit.setStyleSheet("color: #B00000;")
 
   def on_filter_focus(self, event):
@@ -750,7 +750,7 @@ class SortableTableItem(QtWidgets.QTableWidgetItem):
     return (self.data(table_data_order)() < other.data(table_data_order)())
 
 
-class CheckableComboBox(QtGui.QComboBox):
+class CheckableComboBox(QtWidgets.QComboBox):
   """Drop-down list with checkable items"""
   def __init__(self, parent=None):
     super().__init__(parent)

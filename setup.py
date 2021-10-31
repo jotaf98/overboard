@@ -15,6 +15,11 @@ setuptools.setup(
   packages=setuptools.find_packages(),
   package_data={'overboard': ['style.qss']},
   include_package_data=True,
+  install_requires=[
+    'pyqt5>=5.12',
+    'pyqtgraph>=0.12,<0.13',
+    'pyopengl>=3.1',
+  ],
   classifiers=[
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",

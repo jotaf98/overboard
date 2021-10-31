@@ -212,9 +212,9 @@ if __name__ == '__main__':
     import time
     import sys
     import pyqtgraph as pg
-    from PyQt5 import QtGui
+    from PyQt5 import QtWidgets
 
-    app = QtGui.QApplication([])
+    app = QtWidgets.QApplication([])
 
     w = pg.PlotWidget()
 
