@@ -1,5 +1,5 @@
 
-import os, math, time, json, inspect, shutil, re, time, errno
+import os, math, time, json, inspect, shutil, re, errno
 from datetime import datetime, timezone
 from numbers import Number
 
@@ -329,6 +329,7 @@ class Logger:
   # 1) circular references that prevent __del__ from being called shouldn't happen
   # 2) even if they do, append() always flushes the buffer so there's no delay, and the file
   #    will be closed anyway once the process exits.
+  
   def __enter__(self):
     return self
   def __exit__(self, exc_type, exc_value, traceback):
@@ -341,4 +342,6 @@ class Logger:
     if not self.file.closed:
       self.file.write('\n')
       self.file.close()
-  
+
+
+__all__ = ['Logger', 'get_timestamp', 'get_timestamp_folder']

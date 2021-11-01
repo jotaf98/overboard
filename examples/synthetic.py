@@ -3,7 +3,7 @@
 
 import sys, math, random, time
 
-from overboard import Logger
+from overboard_logger import Logger
 
 print("Open OverBoard in another terminal: python3 -m overboard ./logs")
 print("Then press Enter here to start logging.")

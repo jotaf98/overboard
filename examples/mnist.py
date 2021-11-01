@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 
-from overboard import Logger
+from overboard_logger import Logger
 
 from custom_visualization import show_prediction
 

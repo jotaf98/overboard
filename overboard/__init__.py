@@ -1,11 +1,14 @@
 
+"""Pure Python dashboard for monitoring deep learning experiments."""
+
+# expose tshow utility function
+from .visualizations import tshow
+
+__all__ = ['tshow']
+
 # expose logger on import
-
-from .logger import Logger, get_timestamp, get_timestamp_folder
-
-# expose tshow utility function, unless PyQt5 is not found
-
 try:
-  from .visualizations import tshow
-except ModuleNotFoundError:
+  from overboard_logger import Logger, get_timestamp, get_timestamp_folder
+  __all__.extend(['Logger', 'get_timestamp', 'get_timestamp_folder'])
+except ImportError:
   pass
