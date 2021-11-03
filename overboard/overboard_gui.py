@@ -29,10 +29,13 @@ def main():
   parser.add_argument("-refresh-plots", default=3, type=int, help="Refresh interval for plot updates, in seconds.")
   parser.add_argument("-refresh-new", default=11, type=int, help="Refresh interval for finding new experiments, in seconds.")
   parser.add_argument("-refresh-vis", default=10, type=int, help="Refresh interval for visualizations, in seconds.")
-  parser.add_argument("--no-vis-snapshot", action='store_true', default=False, help="Visualizations are draw using a snapshot of the visualization function, saved with each experiment. This ensures visualizations from old experiments are maintained. Passing this option disables this behavior, which may be useful for debugging.")
+  #parser.add_argument("--no-vis-snapshot", action='store_true', default=False, help="Visualizations are draw using a snapshot of the visualization function, saved with each experiment. This ensures visualizations from old experiments are maintained. Passing this option disables this behavior, which may be useful for debugging.")
   parser.add_argument("-max-hidden-history", default=1000, type=int, help="Maximum number of hidden experiments to remember.")
   parser.add_argument("--debug", action='store_true', default=False, help="Does not suppress exceptions during operation, useful for debugging.")
+  parser.add_argument("-loader-log", default='warning', choices=['debug', 'info', 'warning', 'error'], help="Logging verbosity level for experiments loader, from most verbose to least verbose.")
   args = parser.parse_args()
+
+  logging.basicConfig(format="[%(levelname)s] %(message)s")
 
   # create exception and warning hooks, to avoid GUI exiting on uncaught exceptions and suppress warnings
   if not args.debug:
@@ -49,9 +52,9 @@ def main():
 
   # create window, experiments and plots holders
   window = Window(args)
-  experiments = Experiments(args.folder, window, args.force_reopen_files, args.refresh_plots, args.refresh_new)
+  experiments = Experiments(args.folder, window, args.force_reopen_files, args.refresh_plots, args.refresh_new, log_level=args.loader_log)
   plots = Plots(window, args.dashes)
-  visualizations = Visualizations(window, args.no_vis_snapshot, args.mpl_dpi, args.refresh_vis)
+  visualizations = Visualizations(window, args.mpl_dpi, args.refresh_vis)
 
   window.experiments = experiments
 

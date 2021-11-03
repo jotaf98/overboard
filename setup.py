@@ -19,6 +19,7 @@ setuptools.setup(
     'pyqt5>=5.12',
     'pyqtgraph>=0.12,<0.13',
     'pyopengl>=3.1',
+    'fs>=2.4',
     'overboard_logger'
   ],
   classifiers=[

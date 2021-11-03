@@ -1,20 +1,22 @@
 
-import math, logging, os, runpy
+import math, logging, os
 from collections import OrderedDict
+from importlib.util import spec_from_loader, module_from_spec
+
+from fs import open_fs  # pyfilesystem
+from fs.errors import FSError
 
 from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSlot, QTimer
-import PyQt5.QtWidgets as QtWidgets
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 
 try:
-  from torch import load
+  from torch import load as pt_load
+  def load(file):  # ensure tensors are not loaded on the GPU
+    return pt_load(file, map_location='cpu')
 except ImportError:
-  # fallback to regular pickle if pytorch not installed
-  import pickle
-  def load(path, map_location=None):
-    with open(path, 'rb') as file:
-      return pickle.load(file)
+  # fall back to regular pickle if pytorch not installed
+  from pickle import load
 
 try:
   from torchvision.utils import make_grid
@@ -41,7 +43,7 @@ class Visualizations(QObject):
   # in a different thread
   select_folder = pyqtSignal(str, bool)
 
-  def __init__(self, window, no_vis_snapshot, mpl_dpi, poll_time):
+  def __init__(self, window, mpl_dpi, poll_time):
     super().__init__()
 
     self.window = window
@@ -50,7 +52,6 @@ class Visualizations(QObject):
     self.panels = OrderedDict()  # widgets containing plots, indexed by name
     self.modules = {}  # loaded modules with visualization functions
 
-    self.no_vis_snapshot = no_vis_snapshot
     if matplotlib is not None:
       matplotlib.rcParams['figure.dpi'] = mpl_dpi
     
@@ -67,7 +68,7 @@ class Visualizations(QObject):
 
       self.select_folder.connect(self.loader.select_folder)
 
-  def render_visualization(self, directory, name, data):
+  def render_visualization(self, name, data, source_code):
     """Render a visualization to a MatPlotLib or PyQtGraph figure, by calling a
     custom function loaded from a pickle file"""
 
@@ -81,28 +82,27 @@ class Visualizations(QObject):
     if source_file == 'builtin' and func_name == 'tensor':
       panels = tshow(*args, **kwargs, create_window=False, title=name)
     else:
-      # custom visualization function. load the original source file or saved file
-      # from the experiment directory, and call the specified function in it.
-      if not self.no_vis_snapshot:
-        source_file = directory + '/' + name + '.py'
+      # custom visualization function. load the saved source code file from
+      # the experiment directory, and call the specified function in it.
       panels = []
 
       try:
-        # load module from file, unless it's cached already
-        if source_file in self.modules:
-          module = self.modules[source_file]
+        if name in self.modules:
+          module = self.modules[name]  # reuse cached module
         else:
-          module = runpy.run_path(source_file)
+          # create an empty module, and populate it with exec on the source code string
+          module = module_from_spec(spec_from_loader(name, loader=None, origin=source_file))
+          exec(source_code, module.__dict__)
 
-        try:
-          # call the custom function, only if the module loaded successfully
-          panels = module[func_name](name, *args, **kwargs)
-          
-          # cache module if no error so far (otherwise reload next time, maybe it's fixed)
-          self.modules[source_file] = module
+          try:
+            # call the custom function, only if the module loaded successfully
+            panels = getattr(module, func_name)(name, *args, **kwargs)
+            
+            # cache module if no error so far (otherwise reload next time, maybe it's fixed)
+            self.modules[name] = module
 
-        except Exception:
-          logging.exception('Error executing visualization function ' + func_name + ' from ' + source_file)
+          except Exception:
+            logging.exception('Error executing visualization function ' + func_name + ' from ' + source_file)
 
       except Exception:
         logging.exception('Error loading visualization function from ' + source_file)
@@ -112,12 +112,12 @@ class Visualizations(QObject):
     return panels
 
 
-  def on_visualization_ready(self, directory, name, data):
+  def on_visualization_ready(self, name, data, source_code):
     """Called when an updated visualization (possibly new) has been
     loaded for the current experiment"""
 
     # render the MatPlotLib/PyQtGraph figures
-    new_plots = self.render_visualization(directory, name, data)
+    new_plots = self.render_visualization(name, data, source_code)
     
     # assign each plot to a new or reused panel.
     # NOTE: most of this complicated logic is to deal with a specific MatPlotLib/
@@ -226,12 +226,13 @@ class VisualizationsLoader(QObject):
   """Waits for and loads new visualizations asynchronously, on a separate thread"""
 
   # signal to return new visualizations to the Visualizations object, on the main thread
-  visualization_ready = pyqtSignal(str, str, dict)
+  visualization_ready = pyqtSignal(str, dict, str)
 
   def __init__(self, poll_time):
     super().__init__()
     self.poll_time = poll_time
     self.timer = None
+    self.fs = None
 
   @pyqtSlot(str, bool)
   def select_folder(self, folder, exp_done):
@@ -242,7 +243,11 @@ class VisualizationsLoader(QObject):
     self.known_file_sizes = {}
     self.files_iterator = None
     self.retry_file = None
-    self.retry_dir = 0
+    self.source_code = {}
+
+    if self.fs:
+      self.fs.close()
+      self.fs = None
 
     if self.timer is None:
       # create timer for the first time. note this must be done after
@@ -264,25 +269,17 @@ class VisualizationsLoader(QObject):
 
     if not self.base_folder: return
 
-    # find files in the visualizations directory
-    directory = self.base_folder + '/visualizations'
-    if self.files_iterator is None:
+    if not self.fs:  # create a file system object for the visualizations folder
       try:
-        self.files_iterator = os.scandir(directory)
-      except (NotADirectoryError, FileNotFoundError):
-        # directory doesn't exist.
-        # backward compatibility: if this is a file instead of a
-        # directory (old format), the visualizations are stored in
-        # the parent folder. (could remove this code at a later time.)
-        if self.retry_dir == 0 and os.path.isfile(directory):
-          directory = self.base_folder
-          self.files_iterator = os.scandir(directory)
-        else:
-          # check back later (up to 3 times), in case they're being generated
-          self.retry_dir += 1
-          if self.retry_dir < 3:
-            QTimer.singleShot(self.poll_time * 1000, self.poll)
-          return
+        self.fs = open_fs(self.base_folder + '/visualizations')
+      except FSError:
+        # directory doesn't exist yet, try again later
+        self.timer.start(self.poll_time * 1000)
+        return
+
+    # find files in the visualizations directory
+    if self.files_iterator is None:
+      self.files_iterator = self.fs.filterdir('.', files=['*.pth'], namespaces=['details'])
 
     if self.retry_file:  # try the same file again if required
       entry = self.retry_file
@@ -295,22 +292,31 @@ class VisualizationsLoader(QObject):
         entry = None
 
     # get pytorch pickle files
-    if entry and entry.name.endswith('.pth') and entry.is_file():
+    if entry:
       name = entry.name[:-4]  # remove extension
-      new_size = entry.stat().st_size
+      new_size = entry.size
 
       if new_size != self.known_file_sizes.get(name):
         # new file or file size changed
         self.known_file_sizes[name] = new_size
 
+        # if the source code hasn't been loaded yet, read it
+        if name not in self.source_code:
+          try:
+            self.source_code[name] = self.fs.readtext(name + '.py')
+          except FSError:  # not found, must be a built-in (like tshow)
+            self.source_code[name] = None
+
         # load the file (asynchronously with the main thread)
         try:
-          data = load(entry.path, map_location='cpu')
+          with self.fs.open(name + '.pth', mode='rb') as file:
+            data = load(file)
+
           if not isinstance(data, dict) or 'func' not in data:
             raise OSError("Attempted to load a visualization saved with a different protocol version (saving with PyTorch and loading without it is not supported, and vice-versa).")
 
           # send a signal with the results to the main thread
-          self.visualization_ready.emit(directory, name, data)
+          self.visualization_ready.emit(name, data, self.source_code[name])
 
         except Exception as err:
           # ignore errors about incomplete data, since file may
@@ -318,7 +324,7 @@ class VisualizationsLoader(QObject):
           if isinstance(err, RuntimeError) and 'storage has wrong size' in str(err):
             self.retry_file = entry  # try this file again later
           else:
-            logging.exception("Error loading visualization data from " + entry.path)
+            logging.exception(f"Error loading visualization data from {self.base_folder}/{name}.pth")
     
     # wait a bit before checking next file, or a longer time if finished all files.
     # if the experiment is done, don't check again at the end.

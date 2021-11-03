@@ -8,6 +8,8 @@ OverBoard is a lightweight yet powerful dashboard to monitor your experiments.
 
 ## Features
 
+- Load **remote experiments in real-time** through **SSH/FTP** and [others](https://www.pyfilesystem.org/page/index-of-filesystems/).
+
 - A table of **hyper-parameters** with Python-syntax filtering.
 
 - Multiple views of the same data (i.e. **custom X/Y axes**).
@@ -30,9 +32,14 @@ You can install the dependencies with:
 
 - With pip: `pip install pyqt5==5.12 pyqtgraph==0.12`
 
-If you intend to use custom 3D plots with [PyQtGraph](https://pyqtgraph.readthedocs.io/en/latest/3dgraphics.html), add PyOpenGL 3.1 to the lists above.
+Finally, OverBoard itself can be installed with: `pip install fs==2.4 overboard`
+(Conda seems to be too strict when installing [PyFileSystem/fs](https://www.pyfilesystem.org), so pip should be preferred.)
 
-Finally, OverBoard itself can be installed with: `pip install overboard`
+Optional:
+- `pip install fs.sshfs` to support remote files through SSH.
+
+- PyOpenGL 3.1 (either through conda or pip) if you intend to use custom 3D plots with [PyQtGraph](https://pyqtgraph.readthedocs.io/en/latest/3dgraphics.html).
+
 
 
 ## Installation - logger only
@@ -71,13 +78,17 @@ A note about importing: You can either import the `Logger` class from `overboard
 
 ## Remote experiments
 
-The easiest way to monitor remote experiments is to mount their directory over SFTP, and point OverBoard to it.
+It's as simple as:
 
-Tested with: [SSHFS](https://github.com/libfuse/sshfs) (Linux, available in most distros), [FUSE](https://osxfuse.github.io/) (Mac), [SFTP NetDrive](https://www.nsoftware.com/sftp/netdrive/) (Windows).
+```
+python -m overboard ssh://username:password@hostname/path-to-experiments
+```
 
-Since most of these don't allow OverBoard to monitor log files with the default light-weight method, the plots may not update automatically; in that case use the command-line argument `--force-reopen-files`.
+...replacing your SSH user name, password, host name/server, and the directory where OverBoard should look for experiments. The default port is 22, which you can override with :23 or another port number after the host name.
 
-Depending on the remote server's configuration (e.g. firewall settings), you might need to use a VPN to tunnel to the server's network, to ensure that the right ports are not blocked to you (i.e. having SSH access does not guarantee SFTP access from an external network).
+There are a [number of other settings](https://github.com/althonos/fs.sshfs#constructor), which you can append after the path. For example, append `?keepalive=60&config_path=~/.ssh/config` to set the keepalive packets interval to 60 seconds, and specify an OpenSSH configuration file path.
+
+[Other remote file systems](https://www.pyfilesystem.org/page/index-of-filesystems/) are available with by using their [protocol prefixes](https://docs.pyfilesystem.org/en/latest/openers.html).
 
 
 ## Author

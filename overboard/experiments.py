@@ -1,24 +1,29 @@
 
 from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSlot
-from PyQt5.QtWidgets import QApplication
 
-import collections, json, re, logging
-import numpy as np
-from os import walk, path as os_path
+import json, re, logging
 from time import time
 from datetime import datetime
+
+from fs import open_fs, path as fs_path  # pyfilesystem
+from fs.errors import FSError
+
+logger = logging.getLogger('overboard.exp')
 
 
 class Experiments():
   """Stores all Experiment objects, in the name-experiment mapping exps.
   Also manages a thread to find new experiments asynchronously."""
-  def __init__(self, base_folder, window, force_reopen_files, poll_time, crawler_poll_time):
+  def __init__(self, base_folder, window, force_reopen_files, poll_time, crawler_poll_time, log_level):
     self.exps = {}
     self.base_folder = base_folder
     self.window = window
     self.force_reopen_files = force_reopen_files
     self.poll_time = poll_time
     
+    # set logging messages threshold level
+    logger.setLevel(getattr(logging, log_level.upper(), None))
+
     # create crawler object and thread
     self.crawler = ExperimentsCrawler(base_folder=base_folder, crawler_poll_time=crawler_poll_time)
     self.thread = QThread()
@@ -29,10 +34,10 @@ class Experiments():
     self.thread.started.connect(self.crawler.start_crawling)  # connect thread started signal to crawler slot
     self.thread.start()  # start thread
 
-  def on_experiments_ready(self, filenames):
+  def on_experiments_ready(self, filepaths):
     """The crawler found new files, initialize corresponding Experiment objects"""
-    for filename in filenames:
-      exp = Experiment(filename, self.base_folder, self.force_reopen_files, self.poll_time, self.window)
+    for filepath in filepaths:
+      exp = Experiment(filepath, self.base_folder, self.force_reopen_files, self.poll_time, self.window)
       self.exps[exp.name] = exp
 
 
@@ -46,6 +51,7 @@ class ExperimentsCrawler(QObject):
     super().__init__()
     self.base_folder = base_folder
     self.crawler_poll_time = crawler_poll_time
+    self.fs = open_fs(base_folder)
 
   @pyqtSlot()
   def start_crawling(self):
@@ -59,21 +65,18 @@ class ExperimentsCrawler(QObject):
       # find experiment files, and see if there are any new ones
       new_files = []
       last_time = time()
-      for (root, dirs, files) in walk(self.base_folder):
-        for file in files:
-          if file =='stats.csv':  # found one
-            filename = os_path.join(root, file)
-            if filename not in known_files:  # it's new
-              new_files.append(filename)
+      for filename in self.fs.walk.files(filter=['stats.csv']):
+        if filename not in known_files:  # it's new
+          new_files.append(filename)
 
-              # if it's taking a while, show an intermediate result
-              if time() - last_time > 0.5:  # elapsed time in seconds
-                # return the new files as a signal to the main thread
-                if len(new_files) > 0:
-                  self.experiments_ready.emit(new_files)
-                  known_files.update(set(new_files))
-                  new_files.clear()
-                last_time = time()                
+          # if it's taking a while, show an intermediate result
+          if time() - last_time > 0.5:  # elapsed time in seconds
+            # return the new files as a signal to the main thread
+            if len(new_files) > 0:
+              self.experiments_ready.emit(new_files)
+              known_files.update(set(new_files))
+              new_files.clear()
+            last_time = time()
 
       # return the new files as a signal to the main thread
       if len(new_files) > 0:
@@ -88,11 +91,11 @@ class ExperimentsCrawler(QObject):
 
 class Experiment():
   """Stores data for a single experiment, and manages a thread to read new data asynchronously"""
-  def __init__(self, filename, base_folder, force_reopen_files, poll_time, window):
-    directory = os_path.dirname(filename)
-    self.name = os_path.relpath(directory, base_folder)  # experiment name is the path relative to base folder
+  def __init__(self, filepath, base_folder, force_reopen_files, poll_time, window):
+    (rel_path, _, filename) = filepath.rpartition('/')  # extract '/stats.csv' from path; forward slash guaranteed by pyfilesystem
+    self.name = rel_path[1:]  # the experiment name is the directory path, relative to the base folder
     self.filename = filename
-    self.directory = directory
+    self.directory = fs_path.combine(base_folder, rel_path)
 
     self.meta = {}
     self.metrics = []  # names of metrics
@@ -100,9 +103,9 @@ class Experiment():
     self.done = False  # true after reading and the experiment is done writing too
 
     # start hidden if the user hid it the last time (this is a persistent setting)
-    if directory in window.hidden_exp_paths:
+    if self.directory in window.hidden_exp_paths:
       self.visible = False
-      del window.hidden_exp_paths[directory]
+      del window.hidden_exp_paths[self.directory]
     else:
       self.visible = True
 
@@ -116,7 +119,7 @@ class Experiment():
     window.on_exp_init(self)
 
     # create reader object and thread
-    self.reader = ExperimentReader(filename=filename, directory=directory, force_reopen_files=force_reopen_files, poll_time=poll_time)
+    self.reader = ExperimentReader(filename=filename, directory=self.directory, force_reopen_files=force_reopen_files, poll_time=poll_time, name=self.name)
     self.thread = QThread()
 
     # connect ExperimentReader's signals to Experiment method slots, to return data
@@ -171,14 +174,17 @@ class ExperimentReader(QObject):
   data_ready = pyqtSignal(list)
   done = pyqtSignal()
 
-  def __init__(self, filename, directory, force_reopen_files, poll_time):
+  def __init__(self, filename, directory, force_reopen_files, poll_time, name):
     super().__init__()
+    self.name = name
     self.filename = filename
     self.directory = directory
     self.force_reopen_files = force_reopen_files
     self.poll_time = poll_time
     self.num_columns = None
     self.num_rows = 0
+
+    self.fs = open_fs(directory)
 
   @pyqtSlot()
   def start_reading(self):
@@ -187,9 +193,8 @@ class ExperimentReader(QObject):
     # read JSON file with metadata (including timestamp), if it exists
     meta = {}
     try:
-      with open(self.directory + '/meta.json', 'r') as file:
-        meta = json.load(file)
-    except IOError:  # no meta data, not critical
+      meta = json.loads(self.fs.readtext('meta.json'))
+    except (IOError, FSError):  # no meta data, not critical
       self.meta_ready.emit({})
 
     # try interpreting string values in meta-data as an ISO date
@@ -204,18 +209,19 @@ class ExperimentReader(QObject):
     self.meta_ready.emit(meta)
 
     # read data
+    logger.debug(f"Finished reading experiment meta-data; now reading CSV for {self.name}")
     try:
       if self.force_reopen_files:
         self.read_data_slow()
       else:
-        self.read_data_fast()  
-    except (IOError, ValueError):
-      logging.exception('Error reading ' + self.filename)
+        self.read_data_fast()
+    except (IOError, FSError, ValueError):
+      logger.exception(f"Error reading {self.directory}/{self.filename}")
   
   def read_data_fast(self):
     """Polls the file for new data by attempting another read, keeping the file handle open (fast)"""
     done = False
-    with open(self.filename, 'r') as file:
+    with self.fs.open(self.filename) as file:
       (done, line_start) = self.read_lines(file)
       while not done:
         # try to read new data after a while. need to restore read position when there's
@@ -229,11 +235,11 @@ class ExperimentReader(QObject):
     old_size = 0
     line_start = None
     while True:
-      new_size = os_path.getsize(self.filename)
+      info = self.fs.getinfo(self.filename, namespaces=['details'])
 
-      if new_size != old_size:
-        old_size = new_size
-        with open(self.filename, 'r') as file:
+      if info.size != old_size:
+        old_size = info.size
+        with self.fs.open(self.filename, 'r') as file:
           # get new data from the file, picking up where we left off. don't use file size, depends on OS
           if line_start is not None:
             file.seek(line_start)
@@ -247,6 +253,7 @@ class ExperimentReader(QObject):
     """Reads as many lines as possible from an open CSV file, emitting appropriate signals with the data and status.
     Returns whether the experiment is finished (boolean), and the position to re-start reading from."""
     (rows, done) = ([], False)
+    logger.debug(f"Starting to read lines for {self.name}")
 
     while True:
       # try to read a new line. need to restore read position when there's no new
@@ -254,13 +261,16 @@ class ExperimentReader(QObject):
       line_start = file.tell()
       line = file.readline()
       
-      # an empty line, terminated by a line break, marks the end of the experiment; no further reading necessary
-      if line == '\n':
+      # an empty line, terminated by a line break (\n, \r or \r\n), marks the end
+      # of the experiment; no further reading necessary
+      if 1 <= len(line) <= 2 and (char in ('\n', '\r') for char in line):
         done = True
+        logger.debug(f"End of experiment {self.name}")
         break
 
-      # reached the end of file, but there's no line break, indicating that writing is not complete
-      if len(line) == 0 or line[-1] != '\n':
+      # reached the end of file, but there's no line break; writing is not complete
+      if len(line) == 0 or line[-1] not in ('\n', '\r'):
+        logger.debug(f"Incomplete line for {self.name}")
         break
 
       if self.num_columns is None:
@@ -274,6 +284,8 @@ class ExperimentReader(QObject):
 
         # send a signal with the headers
         self.header_ready.emit(headers)
+
+        logger.debug(f"Read headers for {self.name}: {headers}")
       else:
         # interpret line of stat values
         #row = [float(v) for v in line.split(',')]
@@ -289,10 +301,12 @@ class ExperimentReader(QObject):
           row.append(value)
 
         if len(row) != self.num_columns:
+          print(self.num_columns, row)
           raise IOError('A CSV line has an incorrect number of values (compared to the header).')
         
         rows.append(row)
         self.num_rows += 1
+        logger.debug(f"Read row {self.num_rows} for {self.name}")
 
     # send signals that data is ready or the experiment is done, if needed.
     # also return position to seek to, to re-read any incomplete line.

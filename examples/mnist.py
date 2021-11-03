@@ -90,8 +90,8 @@ def main():
             help='learning rate (default: 0.01)')
   parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
             help='SGD momentum (default: 0.5)')
-  parser.add_argument('--no-cuda', action='store_true', default=False,
-            help='disables CUDA training')
+  parser.add_argument('--device', type=str, default='cuda',
+            help='Device (cuda:0 for the first GPU, cuda:1 for the next, etc, or cpu)')
   parser.add_argument('--seed', type=int, default=1, metavar='S',
             help='random seed (default: 1)')
   parser.add_argument('--datadir', type=str, default='/data/mnist/',
@@ -99,13 +99,14 @@ def main():
   parser.add_argument('--outputdir', type=str, default='/data/mnist-experiments/',
             help='output directory')
   args = parser.parse_args()
-  use_cuda = not args.no_cuda and torch.cuda.is_available()
+
+  device = args.device
+  if not torch.cuda.is_available():
+    device = 'cpu'
 
   torch.manual_seed(args.seed)
 
-  device = torch.device("cuda" if use_cuda else "cpu")
-
-  kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
+  kwargs = {'num_workers': 1, 'pin_memory': True} if device != 'cpu' else {}
   train_loader = torch.utils.data.DataLoader(
     datasets.MNIST(args.datadir, train=True, download=True,
              transform=transforms.Compose([
