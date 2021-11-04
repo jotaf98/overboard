@@ -73,7 +73,7 @@ By default a unique folder (using the current timestamp) is created for the logs
 You can also check the `examples` directory:
 
 - `examples/basic.py`: A minimal example. Generates some test logs.
-- `examples/mnist.py`: The mandatory MNIST example. Also includes custom MatPlotLib plots.
+- `examples/mnist.py`: The mandatory MNIST example. Also shows a custom MatPlotLib plot (a confusion matrix).
 - `examples/example_3d.py`: Example custom 3D plot. Requires PyOpenGL.
 
 A note about importing: You can either import the `Logger` class from `overboard` or from `overboard_logger`. If you installed the "logger only" version as described above (no dependencies), then you can only import from `overboard_logger`.

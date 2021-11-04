@@ -238,7 +238,7 @@ class Visualizations(QObject):
       return 'PlotItem'
     if isinstance(plot, gl.GLViewWidget):
       return 'GLViewWidget'
-    raise TypeError("Visualization functions (Logger.visualize) should return a list of"
+    raise TypeError("Visualization functions (Logger.visualize) should return a list of "
       "MatPlotLib Figure, PyQtGraph PlotItem, or PyQtGraph GLViewWidget. A plot with "
       "class " + type(plot).__name__ + " was found.")
 

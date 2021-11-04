@@ -13,7 +13,11 @@ from torchvision import datasets, transforms
 
 from overboard_logger import Logger
 
-from custom_visualization import show_prediction
+try:
+  import matplotlib.pyplot as plt
+except ModuleNotFoundError:
+  print('MatPlotLib not found.')
+  plt = None
 
 
 class Net(nn.Module):
@@ -33,6 +37,39 @@ class Net(nn.Module):
     x = F.dropout(x, training=self.training)
     x = self.fc2(x)
     return F.log_softmax(x, dim=1)
+
+
+def confusion_matrix(name, predictions, labels):
+  """Show the confusion matrix as a MatPlotLib figure.
+  Note this is only executed by the OverBoard GUI, not by the training code."""
+  
+  num_labels = labels.max() + 1
+
+  # create a confusion matrix
+  matrix = torch.zeros((num_labels, num_labels))
+  for (i, j) in zip(labels.tolist(), predictions.tolist()):
+    matrix[i, j] += 1
+  matrix = matrix.numpy()
+
+  # create a figure, and show the matrix
+  (figure, ax) = plt.subplots()
+  ax.imshow(matrix)
+
+  # add axis labels and tick marks
+  plt.xlabel('Predictions')
+  plt.ylabel('Ground-truth labels')
+  plt.xticks(list(range(num_labels)), fontsize=8)
+  plt.yticks(list(range(num_labels)), fontsize=8)
+  figure.subplots_adjust(bottom=0.15)  # make space for bottom label
+
+  # add a text annotation to each matrix cell
+  for i in range(num_labels):
+    for j in range(num_labels):
+      ax.text(j, i, int(matrix[i, j]), ha="center", va="center", color="w", fontsize=8)
+
+  # important: return the figure instead of showing it
+  return figure
+
 
 def train(args, model, device, train_loader, optimizer, epoch, logger):
   model.train()
@@ -59,8 +96,8 @@ def train(args, model, device, train_loader, optimizer, epoch, logger):
       parameters = dict(model.named_parameters())
       logger.tensor('Conv1 filters', parameters['conv1.weight'])
 
-      # this is an example MatPlotLib plot (see custom_visualization.py)
-      logger.visualize(show_prediction, 'A custom plot', data[0,0,:,:], target[0], output[0,:].detach())
+      # show a confusion matrix (custom MatPlotLib plot)
+      logger.visualize(confusion_matrix, 'Confusion matrix (batch)', pred.detach(), target)
 
 def test(args, model, device, test_loader, logger):
   model.eval()
