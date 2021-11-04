@@ -1,7 +1,10 @@
 
-# Example: Log synthetic data
+"""
+Basic example of OverBoard logging.
+Logs several experiments with synthetic data over time.
+"""
 
-import sys, math, random, time
+import math, random, time
 
 from overboard_logger import Logger
 

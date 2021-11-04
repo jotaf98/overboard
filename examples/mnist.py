@@ -1,5 +1,7 @@
 
-# Modified version of the PyTorch MNIST example to log outputs for OverBoard
+"""
+Modified version of the PyTorch MNIST example to log outputs for OverBoard
+"""
 
 from __future__ import print_function
 import argparse
