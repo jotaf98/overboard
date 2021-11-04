@@ -67,7 +67,7 @@ def confusion_matrix(name, predictions, labels):
     for j in range(num_labels):
       ax.text(j, i, int(matrix[i, j]), ha="center", va="center", color="w", fontsize=8)
 
-  # important: return the figure instead of showing it
+  # important: return the figure (or a list of figures) instead of showing it
   return figure
 
 
