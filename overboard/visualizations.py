@@ -61,6 +61,8 @@ class Visualizations(QObject):
     self.panels = OrderedDict()  # widgets containing plots, indexed by name
     self.modules = {}  # loaded modules with visualization functions
 
+    self.folder = None
+
     if matplotlib is not None:
       matplotlib.rcParams['figure.dpi'] = mpl_dpi
     
@@ -125,9 +127,13 @@ class Visualizations(QObject):
     return panels
 
 
-  def on_visualization_ready(self, name, data, source_code):
+  def on_visualization_ready(self, name, data, source_code, base_folder):
     """Called when an updated visualization (possibly new) has been
     loaded for the current experiment"""
+
+    # ignore it if it's not the right base folder (happens when the user does not
+    # wait for loading to finish and selects another experiment)
+    if base_folder != self.folder: return
 
     # render the MatPlotLib/PyQtGraph figures
     new_plots = self.render_visualization(name, data, source_code)
@@ -198,8 +204,10 @@ class Visualizations(QObject):
     """Select a new experiment, showing its visualizations (and removing previously selected ones)"""
     # start loading visualizations
     if exp is not None:
+      self.folder = exp.directory
       self.select_folder.emit(exp.directory, exp.done)
     else:
+      self.folder = None
       self.select_folder.emit('', False)
 
     # remove previous widgets
@@ -239,7 +247,7 @@ class VisualizationsLoader(QObject):
   """Waits for and loads new visualizations asynchronously, on a separate thread"""
 
   # signal to return new visualizations to the Visualizations object, on the main thread
-  visualization_ready = pyqtSignal(str, dict, str)
+  visualization_ready = pyqtSignal(str, dict, str, str)
 
   def __init__(self, poll_time):
     super().__init__()
@@ -329,7 +337,7 @@ class VisualizationsLoader(QObject):
             raise OSError("Attempted to load a visualization saved with a different protocol version (saving with PyTorch and loading without it is not supported, and vice-versa).")
 
           # send a signal with the results to the main thread
-          self.visualization_ready.emit(name, data, self.source_code[name])
+          self.visualization_ready.emit(name, data, self.source_code[name], self.base_folder)
 
         except Exception as err:
           # ignore errors about incomplete data, since file may
