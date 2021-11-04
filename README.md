@@ -28,9 +28,9 @@ OverBoard is a lightweight yet powerful dashboard to monitor your experiments.
 
 You can install the dependencies with:
 
-- With Conda: `conda install pyqt=5.12 pyqtgraph=0.12 -c conda-forge`
+- With Conda: `conda install pyqt=5.12 pyqtgraph=0.11 -c conda-forge`
 
-- With pip: `pip install pyqt5==5.12 pyqtgraph==0.12`
+- With pip: `pip install pyqt5==5.12 pyqtgraph==0.11`
 
 Finally, OverBoard itself can be installed with: `pip install fs==2.4 overboard`
 (Conda seems to be too strict when installing [PyFileSystem/fs](https://www.pyfilesystem.org), so pip should be preferred.)
@@ -39,6 +39,8 @@ Optional:
 - `pip install fs.sshfs` to support remote files through SSH.
 
 - PyOpenGL 3.1 (either through conda or pip) if you intend to use custom 3D plots with [PyQtGraph](https://pyqtgraph.readthedocs.io/en/latest/3dgraphics.html).
+
+- MatPlotLib if you intend to use it for custom plots.
 
 
 
