@@ -15,6 +15,7 @@ setuptools.setup(
   packages=['overboard'],
   package_data={'overboard': ['style.qss']},
   include_package_data=True,
+  python_requires='>=3.6',
   install_requires=[
     'pyqt5>=5.12',
     'pyqtgraph>=0.12,<0.13',
