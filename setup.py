@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setuptools.setup(
   name="overboard",
-  version="0.7.1",
+  version="0.8.0",
   author="Joao Henriques",
   description="Pure Python dashboard for monitoring deep learning experiments",
   long_description=long_description,
@@ -21,7 +21,7 @@ setuptools.setup(
     'pyqtgraph>=0.11,<0.12',
     'pyopengl>=3.1',
     'fs>=2.4',
-    'overboard_logger'
+    'overboard_logger>=0.7.1'
   ],
   classifiers=[
     "Programming Language :: Python :: 3",
