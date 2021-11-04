@@ -255,6 +255,13 @@ class Window(QtWidgets.QMainWindow):
     if add_to_layout and not reuse:  # add to window's flow layout
       self.flow_layout.addWidget(panel)
 
+      # sort the panels alphabetically, by the title text.
+      # prepend spaces to experiment plots' titles so they appear
+      # before custom visualizations.
+      self.flow_layout._items.sort(key=lambda i:
+        int(hasattr(i.widget().plot_widget, 'is_experiment_plot')) * '    ' +
+        i.widget().title_widget.text())
+
     return panel
   
   def create_dropdown(self, sidebar, label, options, setting_name, default='', reset_style=False, checkable=False, return_label=False):

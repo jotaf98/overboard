@@ -66,6 +66,8 @@ def create_plot_widget():
   plot_widget = pg.PlotWidget(axisItems=axis)
   plot_widget.showGrid(x=True, y=True, alpha=1)
 
+  plot_widget.is_experiment_plot = True  # mark it, mostly used for ordering panels
+
   return plot_widget
 
 
