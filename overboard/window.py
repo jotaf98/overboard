@@ -255,8 +255,8 @@ class Window(QtWidgets.QMainWindow):
 
     if add_to_layout and not reuse:  # add to window's flow layout
       self.flow_layout.addWidget(panel)
-      self.sort_panels()  # sort to place this panel in the right place
 
+    self.sort_panels()  # sort to place this panel in the right place
     return panel
   
   def on_panel_title_click(self, panel):
@@ -824,12 +824,9 @@ def get_panel_sort_key(item):
   They are sorted by title, but we want visualizations to come second,
   and hidden/minimized panels last."""
   widget = item.widget()
-  key = widget.title_widget.text()
-  if hasattr(widget.plot_widget, 'is_experiment_plot'):
-    key = '  ' + key  # use spaces to make experiment plots appear first
-  if widget.plot_widget.isVisible():
-    key = '    ' + key  # use spaces to make visible plots appear first
-  return key
+  return (not widget.plot_widget.isVisible(),  # visible panels come first
+    not hasattr(widget.plot_widget, 'is_experiment_plot'),  # then experiment plots
+    widget.title_widget.text())  # all else being equal, sort titles alphabetically
 
 
 def set_style(app):
