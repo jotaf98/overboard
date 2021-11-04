@@ -87,6 +87,8 @@ class Visualizations(QObject):
     kwargs = data['kwargs']
     source_file = data['source']
 
+    logger.debug(f"Vis main thread: rendering {func_name} from {name}")
+
     # call a built-in function, e.g. simple tensor visualization
     if source_file == 'builtin' and func_name == 'tensor':
       panels = tshow(*args, **kwargs, create_window=False, title=name)
@@ -98,20 +100,22 @@ class Visualizations(QObject):
       try:
         if name in self.modules:
           module = self.modules[name]  # reuse cached module
+          logger.debug("Vis main thread: reused cached module")
         else:
           # create an empty module, and populate it with exec on the source code string
           module = module_from_spec(spec_from_loader(name, loader=None, origin=source_file))
           exec(source_code, module.__dict__)
+          logger.debug("Vis main thread: loaded new module")
 
-          try:
-            # call the custom function, only if the module loaded successfully
-            panels = getattr(module, func_name)(name, *args, **kwargs)
-            
-            # cache module if no error so far (otherwise reload next time, maybe it's fixed)
-            self.modules[name] = module
+        try:
+          # call the custom function, only if the module loaded successfully
+          panels = getattr(module, func_name)(name, *args, **kwargs)
+          
+          # cache module if no error so far (otherwise reload next time, maybe it's fixed)
+          self.modules[name] = module
 
-          except Exception:
-            logger.exception('Error executing visualization function ' + func_name + ' from ' + source_file)
+        except Exception:
+          logger.exception('Error executing visualization function ' + func_name + ' from ' + source_file)
 
       except Exception:
         logger.exception('Error loading visualization function from ' + source_file)
