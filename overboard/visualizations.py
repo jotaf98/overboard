@@ -1,5 +1,5 @@
 
-import math, logging, os
+import math, logging
 from collections import OrderedDict
 from importlib.util import spec_from_loader, module_from_spec
 
@@ -9,6 +9,10 @@ from fs.errors import FSError
 from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSlot, QTimer
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
+
+
+logger = logging.getLogger('overboard.vis')
+
 
 try:
   from torch import load as pt_load
@@ -30,10 +34,12 @@ try:
   from matplotlib.pyplot import cm as colormaps
 except:
   def FigureCanvas(fig):
-    logging.warning("Could not load MatPlotLib.")
+    logger.warning("Could not load MatPlotLib.")
     return pg.PlotWidget()
   colormaps = None
   matplotlib = None
+
+from .tshow import tshow
 
 
 class Visualizations(QObject):
@@ -43,8 +49,11 @@ class Visualizations(QObject):
   # in a different thread
   select_folder = pyqtSignal(str, bool)
 
-  def __init__(self, window, mpl_dpi, poll_time):
+  def __init__(self, window, mpl_dpi, poll_time, log_level):
     super().__init__()
+
+    # set logging messages threshold level
+    logger.setLevel(getattr(logging, log_level.upper(), None))
 
     self.window = window
     window.visualizations = self  # back-reference
@@ -102,10 +111,10 @@ class Visualizations(QObject):
             self.modules[name] = module
 
           except Exception:
-            logging.exception('Error executing visualization function ' + func_name + ' from ' + source_file)
+            logger.exception('Error executing visualization function ' + func_name + ' from ' + source_file)
 
       except Exception:
-        logging.exception('Error loading visualization function from ' + source_file)
+        logger.exception('Error loading visualization function from ' + source_file)
 
     # ensure a list is returned
     if not isinstance(panels, list): panels = [panels]
@@ -324,7 +333,7 @@ class VisualizationsLoader(QObject):
           if isinstance(err, RuntimeError) and 'storage has wrong size' in str(err):
             self.retry_file = entry  # try this file again later
           else:
-            logging.exception(f"Error loading visualization data from {self.base_folder}/{name}.pth")
+            logger.exception(f"Error loading visualization data from {self.base_folder}/{name}.pth")
     
     # wait a bit before checking next file, or a longer time if finished all files.
     # if the experiment is done, don't check again at the end.
@@ -333,123 +342,4 @@ class VisualizationsLoader(QObject):
     elif not self.exp_done:
       self.files_iterator = None  # check directory contents from scratch next time
       self.timer.start(self.poll_time * 1000)
-
-
-tshow_images = []
-def tshow(tensor, create_window=True, title='Tensor', data_range=None, grayscale=False, legend=None, **kwargs):
-  """Shows a PyTorch tensor (including one or more RGB images) using PyQtGraph."""
-
-  if make_grid is None:
-    raise ImportError('Could not import torchvision (from PyTorch), which is necessary for tshow.')
-
-  tensor = tensor.detach().cpu()
-  original_shape = tensor.shape
-
-  if data_range is None:
-    data_range = (tensor.min(), tensor.max())
-
-  if len(tensor.shape) > 4:
-    logging.exception('Cannot show tensors with more than 4 dimensions.')
-    return None
-
-  # insert singleton dimensions on the left to always get 4 dimensions
-  while len(tensor.shape) < 4:
-    tensor = tensor.unsqueeze(0)
-
-  sh = tensor.shape
-  if sh[0] == 1:  # case of 3D tensors, leave singleton dimension for color
-    tensor = tensor.reshape(sh[1], 1, sh[2], sh[3])
-
-  sh = tensor.shape
-  if sh[1] in [1, 3]:
-    # a linear collection of images: channels are RGB or single-channel.
-    # choose number of columns such that they are laid out in a square.
-    if 'nrow' not in kwargs:
-      #kwargs['nrow'] = math.ceil(math.sqrt(sh[0]))
-      kwargs['nrow'] = math.ceil(math.sqrt(sh[0]) * sh[2] / sh[3])
-  else:
-    # when channels are not RGB or single-channel, display them as columns
-    tensor = tensor.reshape(sh[0] * sh[1], 1, sh[2], sh[3])
-    kwargs['nrow'] = sh[1]
-
-
-  # arrange into a grid
-  image = make_grid(tensor, **kwargs, normalize=False, padding=0)
-  image = image.permute(2, 1, 0).numpy()  # pytorch convention to numpy image convention
-
-  # convert grayscale RGB images to colormapped images (single-channel)
-  if tensor.shape[1] == 1:
-    image = image[:,:,0]
-
-  # show it
-  im_item = pg.ImageItem(image)
-  title = title + ' ' + str(tuple(original_shape))
-
-  if create_window:  # stand-alone window
-    win = pg.GraphicsWindow(title=title)
-    plot = win.addPlot()
-  else:  # plot item to return
-    plot = pg.PlotItem()
-  plot.addItem(im_item)
-
-  plot.getViewBox().invertY(True)
-  plot.setAspectLocked(True)
-  plot.hideAxis('left')
-  plot.hideAxis('bottom')
-
-  # draw a grid
-  (cell_w, cell_h) = (sh[3], sh[2])
-  (w, h) = image.shape[0:2]
-  for x in range(0, w + 1, cell_w):
-    plot.plot([x, x], [0, h])
-  for y in range(0, h + 1, cell_h):
-    plot.plot([0, w], [y, y])
-
-  if len(image.shape) == 3:
-    # RGB image
-    im_item.setLevels([data_range]*3)
-  else:
-    # grayscale image or heatmap, set up colormap and possibly a legend
-    if not grayscale and colormaps is not None:
-      # use better colormap if matplotlib is available
-      colormap = colormaps.viridis
-      colormap._init()
-      lut = (colormap._lut * 255)[:-1,:]  # remove last row
-      im_item.setLookupTable(lut)
-      (low_color, high_color) = (lut[0,:3], lut[-1,:3])
-    else:
-      lut = []
-      (low_color, high_color) = ('k', 'w')
-
-    im_item.setLevels(data_range)
-
-    if legend or (legend is None and not grayscale):
-      # create legend with max and min values
-      leg = plot.addLegend(offset=(1, 1))
-      leg.addItem(FilledIcon(low_color), "Min: {:.3g}".format(data_range[0]))
-      leg.addItem(FilledIcon(high_color), "Max: {:.3g}".format(data_range[1]))
-
-      # monkey-patch paint method to draw a more opaque background
-      def paint(self, p, *args):
-        color = pg.mkColor(pg.getConfigOption('background'))
-        color.setAlpha(200)
-        p.fillRect(self.boundingRect(), pg.mkBrush(color))
-      leg.paint = paint.__get__(leg)
-
-  if create_window:
-    tshow_images.append(win)  # keep reference, otherwise the window will be garbage-collected
-    win.show()
-  else:
-    return plot
-
-
-class FilledIcon(pg.graphicsItems.LegendItem.ItemSample):
-  """Custom legend icon, completely filled with a single color."""
-  def __init__(self, color):
-    super().__init__(None)
-    self.color = color
-    self.setFixedWidth(20)
-
-  def paint(self, p, *args):
-    p.fillRect(self.boundingRect(), pg.mkBrush(*self.color))
 

@@ -33,7 +33,9 @@ def main():
   parser.add_argument("-max-hidden-history", default=1000, type=int, help="Maximum number of hidden experiments to remember.")
   parser.add_argument("--debug", action='store_true', default=False, help="Does not suppress exceptions during operation, useful for debugging.")
   parser.add_argument("-loader-log", default='warning', choices=['debug', 'info', 'warning', 'error'], help="Logging verbosity level for experiments loader, from most verbose to least verbose.")
+  parser.add_argument("-vis-log", default='warning', choices=['debug', 'info', 'warning', 'error'], help="Logging verbosity level for visualizations, from most verbose to least verbose.")
   args = parser.parse_args()
+
 
   logging.basicConfig(format="[%(levelname)s] %(message)s")
 
@@ -54,15 +56,21 @@ def main():
     sys.excepthook = trap_exceptions
     QtCore.qInstallMessageHandler(ignore_qt_warnings)
   
+
   # create Qt application
   app = QtWidgets.QApplication(sys.argv)
   set_style(app)
 
   # create window, experiments and plots holders
   window = Window(args)
-  experiments = Experiments(args.folder, window, args.force_reopen_files, args.refresh_plots, args.refresh_new, log_level=args.loader_log)
+  
+  experiments = Experiments(args.folder, window, args.force_reopen_files,
+    args.refresh_plots, args.refresh_new, log_level=args.loader_log)
+
   plots = Plots(window, args.dashes)
-  visualizations = Visualizations(window, args.mpl_dpi, args.refresh_vis)
+
+  visualizations = Visualizations(window, args.mpl_dpi, args.refresh_vis,
+    log_level=args.vis_log)
 
   window.experiments = experiments
 

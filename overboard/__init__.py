@@ -2,7 +2,7 @@
 """Pure Python dashboard for monitoring deep learning experiments."""
 
 # expose tshow utility function
-from .visualizations import tshow
+from .tshow import tshow
 
 __all__ = ['tshow']
 
