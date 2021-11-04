@@ -37,6 +37,14 @@ def main():
 
   logging.basicConfig(format="[%(levelname)s] %(message)s")
 
+  # since SSH is a common use case, warn in case fs.sshfs is not installed
+  if args.folder.lower().startswith('ssh://'):
+    try:
+      import fs.sshfs
+    except ModuleNotFoundError:
+      raise ModuleNotFoundError("To load remote experiments over SSH, the fs.sshfs module must be installed.")
+
+
   # create exception and warning hooks, to avoid GUI exiting on uncaught exceptions and suppress warnings
   if not args.debug:
     def trap_exceptions(err_type, err_value, traceback):
