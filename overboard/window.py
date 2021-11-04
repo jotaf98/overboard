@@ -235,6 +235,7 @@ class Window(QtWidgets.QMainWindow):
     if not reuse:
       label = QtWidgets.QLabel(title)
       label.setAlignment(Qt.AlignCenter)
+      label.mousePressEvent = lambda _: self.on_panel_title_click(panel)
 
       vbox = QtWidgets.QVBoxLayout()
       vbox.addWidget(label, stretch=0)
@@ -254,16 +255,28 @@ class Window(QtWidgets.QMainWindow):
 
     if add_to_layout and not reuse:  # add to window's flow layout
       self.flow_layout.addWidget(panel)
-
-      # sort the panels alphabetically, by the title text.
-      # prepend spaces to experiment plots' titles so they appear
-      # before custom visualizations.
-      self.flow_layout._items.sort(key=lambda i:
-        int(hasattr(i.widget().plot_widget, 'is_experiment_plot')) * '    ' +
-        i.widget().title_widget.text())
+      self.sort_panels()  # sort to place this panel in the right place
 
     return panel
   
+  def on_panel_title_click(self, panel):
+    """Hide or show a panel's content, when its title text is clicked"""
+    if panel.plot_widget.isVisible():
+      panel.plot_widget.hide()
+      panel.setFixedHeight(2 * panel.title_widget.height())
+      panel.title_widget.setText(panel.title_widget.text() + ' (hidden)')
+      panel.title_widget.setStyleSheet('color: #909090')
+    else:
+      panel.plot_widget.show()
+      panel.setFixedHeight(self.size_slider.value())
+      panel.title_widget.setText(panel.title_widget.text()[:-len(' (hidden)')])
+      panel.title_widget.setStyleSheet('')
+    self.sort_panels()  # move the hidden panel to the end, or back again
+
+  def sort_panels(self):
+    """Sort the panels alphabetically by title (and some other rules)"""
+    self.flow_layout._items.sort(key=get_panel_sort_key)
+
   def create_dropdown(self, sidebar, label, options, setting_name, default='', reset_style=False, checkable=False, return_label=False):
     """Create a new dropdown menu, associated with a persistent setting"""
     rows = sidebar.rowCount()
@@ -804,6 +817,19 @@ def print_datetime(dt):
   if (now - dt).days <= 7: return f"{dt:%a, %X}"  # weekday, time
   if dt.year == now.year: return f"{dt.day} {dt:%b, %X}"  # day month, time
   return f"{dt.day} {dt:%b %Y, %X}"  # day month year, time
+
+
+def get_panel_sort_key(item):
+  """Get a key from a panel for sorting.
+  They are sorted by title, but we want visualizations to come second,
+  and hidden/minimized panels last."""
+  widget = item.widget()
+  key = widget.title_widget.text()
+  if hasattr(widget.plot_widget, 'is_experiment_plot'):
+    key = '  ' + key  # use spaces to make experiment plots appear first
+  if widget.plot_widget.isVisible():
+    key = '    ' + key  # use spaces to make visible plots appear first
+  return key
 
 
 def set_style(app):
