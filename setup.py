@@ -18,7 +18,7 @@ setuptools.setup(
   python_requires='>=3.6',
   install_requires=[
     'pyqt5>=5.12',
-    'pyqtgraph>=0.12,<0.13',
+    'pyqtgraph>=0.11,<0.12',
     'pyopengl>=3.1',
     'fs>=2.4',
     'overboard_logger'
