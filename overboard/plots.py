@@ -135,9 +135,12 @@ class Plots():
 
     # create list of panels by: metric, experiment, hyper-parameter type,
     # value of a single hyper-parameter, or create a single panel
-    if panel_option == "One per metric": panels = exp.metrics[:]  # explicit copy
-    elif panel_option == "One per run": panels = [exp.name]
-    elif panel_option == "Single panel": panels = [y_option]
+    if panel_option == "One per metric":
+      panels = [m for m in exp.metrics if m != "iteration" and m != "time"]
+    elif panel_option == "One per run":
+      panels = [exp.name]
+    elif panel_option == "Single panel":
+      panels = [y_option]
     else:  # single hyper-parameter selected, create different panels based on value
       panels = [panel_option + ' = ' + str(exp.meta.get(panel_option, None))]  # None if missing
 
@@ -149,6 +152,8 @@ class Plots():
 
     info = []  # the list of lines to plot
     for panel in panels:  # possibly spread plots across panels
+      logger.debug(f"Panel {panel}")
+
       lines = [(x_option, y_option)]  # single line per panel, with these X and Y sources
       if x_option == "All metrics":  # several lines in a panel - one per metric
         lines = [(name, y_option) for name in exp.metrics]
@@ -156,6 +161,7 @@ class Plots():
         lines = [(x_option, name) for name in exp.metrics]
 
       for (x, y) in lines:  # possibly create multiple lines for this panel
+        logger.debug(f"Line x={x}, y={y}")
         if x_option == "Panel metric": x = panel  # different metrics per panel
         if y_option == "Panel metric": y = panel
 
@@ -166,18 +172,24 @@ class Plots():
         else: y_relative = False
 
         # skip if not part of the subset
-        if x not in metrics_subset or y not in metrics_subset: continue
+        if ((x not in exp.meta and x not in metrics_subset) or
+            (y not in exp.meta and y not in metrics_subset)):
+          logger.debug("Skipping since x or y not in metrics subset")
+          continue
 
         # a plot with the same values on X and Y is redundant, so skip it
-        if x == y: continue
-
-        # skip (arguably) useless plots: time vs iteration
-        if x in ('time', 'iteration') and y in ('time', 'iteration'):
+        if x == y:
+          logger.debug("Skipping since x==y")
           continue
 
         # skip if this experiment does not have the required data
-        if x not in exp.meta and x not in exp.metrics: continue
-        if y not in exp.meta and y not in exp.metrics: continue
+        if x not in exp.meta and x not in exp.metrics:
+          logger.debug("Skipping since x not in meta or metrics")
+          continue
+        
+        if y not in exp.meta and y not in exp.metrics:
+          logger.debug("Skipping since y not in meta or metrics")
+          continue
 
         # final touches and compose dict
         info.append(dict(panel=panel, x=x, y=y, line_id=(x, y, line_id),
@@ -191,6 +203,8 @@ class Plots():
 
     if not exp.is_visible() or len(exp.metrics) == 0:
       return False  # plots are invisible or no data loaded yet
+
+    logger.debug(f"Adding plots from experiment {exp.name}")
 
     plots = self.define_plots(exp)
     for plot in plots:
@@ -309,7 +323,7 @@ class Plots():
     plot_widget = create_plot_widget()
     panel = self.window.add_panel(plot_widget, title)
 
-    logger.info(f"Adding plot panel {title}")
+    logger.debug(f"Adding plot panel {title}")
 
     plot_item = panel.plot_widget.getPlotItem()
     plot_item.setLabel('bottom', plot['x'])  # set X axis label
