@@ -92,7 +92,7 @@ python -m overboard ssh://username:password@hostname/path-to-experiments
 
 There are a [number of other settings](https://github.com/althonos/fs.sshfs#constructor), which you can append after the path. For example, append `?keepalive=60&config_path=~/.ssh/config` to set the keepalive packets interval to 60 seconds, and specify an OpenSSH configuration file path.
 
-[Other remote file systems](https://www.pyfilesystem.org/page/index-of-filesystems/) are available with by using their [protocol prefixes](https://docs.pyfilesystem.org/en/latest/openers.html).
+[Other remote file systems](https://www.pyfilesystem.org/page/index-of-filesystems/) are available by using [appropriate prefixes](https://docs.pyfilesystem.org/en/latest/openers.html) (e.g. `ftp://`).
 
 
 ## Author
