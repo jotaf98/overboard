@@ -111,7 +111,8 @@ class Plots():
 
     # some combinations are invalid, change to sensible defaults in those cases
     if panel_option == "One per metric":
-      if x_option != "Panel metric" and y_option != "Panel metric":  # Panel metric is unused, so all panels would look the same
+      # Panel metric is unused, so all panels would look the same
+      if x_option != "Panel metric" and y_option != "Panel metric":
         y_option = "Panel metric"
         self.window.y_dropdown.setCurrentText(y_option)
     
@@ -124,8 +125,12 @@ class Plots():
         y_option = "time"
         self.window.y_dropdown.setCurrentText(y_option)
 
-    if x_option == "All metrics" and y_option == "All metrics":
-      x_option = "iteration"
+    # don't let X and Y axis be set to the same value
+    if x_option == y_option:
+      if x_option != "iteration":
+        x_option = "iteration"
+      else:
+        x_option = "time (relative)"
       self.window.x_dropdown.setCurrentText(x_option)
 
     # create list of panels by: metric, experiment, hyper-parameter type,
