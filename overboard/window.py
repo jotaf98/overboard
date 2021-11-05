@@ -169,6 +169,7 @@ class Window(QtWidgets.QMainWindow):
     table.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
     table.setHorizontalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)  # smooth scrolling
     table.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)
+    table.setItemDelegate(ElidedTextItemDelegate())  # fix bug where text is not elided properly
     
     table.verticalHeader().hide()  # hide vertical header
     
@@ -798,6 +799,41 @@ class CheckableComboBox(QtWidgets.QComboBox):
     items = [model.item(i) for i in range(model.rowCount())]
     state = (Qt.Unchecked if unchecked else Qt.Checked)
     return [str(item.text()) for item in items if item.checkState() == state]
+
+
+class ElidedTextItemDelegate(QtWidgets.QStyledItemDelegate):
+  """Helper delegate to draw proper elided text (i.e. cut off with ...) in tables"""
+  def paint(self, painter, option, index):
+    if not index.isValid():
+      return
+
+    # modify a copy of the options
+    opt = QtWidgets.QStyleOptionViewItem(option)
+    self.initStyleOption(opt, index)
+    style = QtWidgets.QApplication.style()
+
+    # reduce the rect a bit
+    painter.save()
+    painter.setClipRect(opt.rect)
+    padding = 3
+    opt.rect = opt.rect.adjusted(padding, padding, -padding, -padding)
+
+    # elide the text as a string
+    text = opt.fontMetrics.elidedText(opt.text, Qt.ElideRight, opt.rect.width())
+
+    # draw it, with the proper role (i.e. color if selected)
+    text_role = QtGui.QPalette.NoRole
+    if option.state & style.State_Selected:
+      text_role = QtGui.QPalette.HighlightedText
+    style.drawItemText(painter, opt.rect, opt.displayAlignment,
+      opt.palette, True, text, text_role)
+
+    # draw the item again with empty text to complete it
+    painter.restore()
+    opt.rect = option.rect
+    opt.textElideMode = Qt.ElideNone
+    opt.text = ""
+    style.drawControl(QtWidgets.QStyle.CE_ItemViewItem, opt, painter, opt.widget)
 
 
 def create_scroller():
