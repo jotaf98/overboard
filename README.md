@@ -2,18 +2,24 @@
 OverBoard is a lightweight yet powerful dashboard to monitor your experiments.
 
 <p align="center">
-<i>Load <b>remote experiments in real-time</b> through <b>SSH/FTP</b> and <a href="https://www.pyfilesystem.org/page/index-of-filesystems/">others</a>.</i><br>
-<img align="center" alt="editor" src="https://raw.githubusercontent.com/jotaf98/overboard/master/images/screen1.png" /><br>
-
-<i>Custom visualisations (tensors and any custom plot with familiar <b>MatPlotLib</b> syntax).</i><br>
-<img align="center" alt="editor" src="https://raw.githubusercontent.com/jotaf98/overboard/master/images/screen2.png" /><br>
-
-<i>A table of <b>hyper-parameters</b> with Python-syntax filtering.</i><br>
-<img align="center" alt="editor" src="https://raw.githubusercontent.com/jotaf98/overboard/master/images/screen3.png" /><br>
-
-<i><b>Custom X/Y axes</b>, including hyper-parameters (<b>bubble plots</b>) and percentile intervals for multiple runs (<b>shaded plots</b>).</i><br>
-<img align="center" alt="editor" src="https://raw.githubusercontent.com/jotaf98/overboard/master/images/screen4.png" /><br>
+Load <b>remote experiments in real-time</b> through <b>SSH/FTP</b> and <a href="https://www.pyfilesystem.org/page/index-of-filesystems/">others</a>.
 </p>
+<img align="center" src="https://raw.githubusercontent.com/jotaf98/overboard/master/images/screen1.png" />
+
+<p align="center">
+Custom visualisations (tensors and any custom plot with familiar <b>MatPlotLib</b> syntax).</p>
+<img align="center" src="https://raw.githubusercontent.com/jotaf98/overboard/master/images/screen2.png" />
+
+<p align="center">
+A table of <b>hyper-parameters</b> with Python-syntax filtering.
+</p>
+<img align="center" src="https://raw.githubusercontent.com/jotaf98/overboard/master/images/screen3.png" />
+
+<p align="center">
+<b>Custom X/Y axes</b>, including hyper-parameters (<b>bubble plots</b>) and percentile intervals for multiple runs (<b>shaded plots</b>).
+</p>
+<img align="center" src="https://raw.githubusercontent.com/jotaf98/overboard/master/images/screen7.png" />
+
 
 
 ## Installation
