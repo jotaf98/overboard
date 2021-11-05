@@ -24,9 +24,14 @@ dashes = [QtCore.Qt.SolidLine, QtCore.Qt.DashLine, QtCore.Qt.DotLine, QtCore.Qt.
 #dashes_by_name = dict(zip(['-', '--', ':', '-.', '-..'], dashes))
 widths = [2, 1, 3]  # line widths
 
+logger = logging.getLogger('overboard.plt')
+
 
 class Plots():
-  def __init__(self, window, dashes):
+  def __init__(self, window, dashes, log_level):
+    # set logging messages threshold level
+    logger.setLevel(getattr(logging, log_level.upper(), None))
+
     self.window = window
     window.plots = self  # back-reference
     self.dashes = dashes  # option to cycle through dashes first instead of colors
@@ -298,6 +303,8 @@ class Plots():
     title = plot['panel']
     plot_widget = create_plot_widget()
     panel = self.window.add_panel(plot_widget, title)
+
+    logger.info(f"Adding plot panel {title}")
 
     plot_item = panel.plot_widget.getPlotItem()
     plot_item.setLabel('bottom', plot['x'])  # set X axis label

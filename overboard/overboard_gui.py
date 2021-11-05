@@ -34,6 +34,8 @@ def main():
   parser.add_argument("--debug", action='store_true', default=False, help="Does not suppress exceptions during operation, useful for debugging.")
   parser.add_argument("-loader-log", default='warning', choices=['debug', 'info', 'warning', 'error'], help="Logging verbosity level for experiments loader, from most verbose to least verbose.")
   parser.add_argument("-vis-log", default='warning', choices=['debug', 'info', 'warning', 'error'], help="Logging verbosity level for visualizations, from most verbose to least verbose.")
+  parser.add_argument("-plots-log", default='warning', choices=['debug', 'info', 'warning', 'error'], help="Logging verbosity level for plots, from most verbose to least verbose.")
+  parser.add_argument("--clear-settings", action='store_true', default=False, help="Clears all stored settings about the GUI state.")
   args = parser.parse_args()
 
 
@@ -62,12 +64,13 @@ def main():
   set_style(app)
 
   # create window, experiments and plots holders
-  window = Window(args)
+  window = Window(window_title='OverBoard - ' + args.folder,
+    max_hidden_history=args.max_hidden_history, clear_settings=args.clear_settings)
   
   experiments = Experiments(args.folder, window, args.force_reopen_files,
     args.refresh_plots, args.refresh_new, log_level=args.loader_log)
 
-  plots = Plots(window, args.dashes)
+  plots = Plots(window, args.dashes, log_level=args.plots_log)
 
   visualizations = Visualizations(window, args.mpl_dpi, args.refresh_vis,
     log_level=args.vis_log)

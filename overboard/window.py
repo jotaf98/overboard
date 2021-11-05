@@ -38,7 +38,7 @@ table_data_order = Qt.UserRole + 2  # sorting order (for custom sorting, used fo
 
 
 class Window(QtWidgets.QMainWindow):
-  def __init__(self, args):
+  def __init__(self, max_hidden_history, window_title, clear_settings):
     super(Window, self).__init__(parent=None)
     
     self.experiments = None  # object that manages experiments
@@ -46,11 +46,13 @@ class Window(QtWidgets.QMainWindow):
     self.visualizations = None  # object that manages custom visualizations
     self.last_process_events = time()  # to update during heavy loads
     self.rebuilding_plots = False  # used by rebuild_plots
-    self.max_hidden_history = args.max_hidden_history
+    self.max_hidden_history = max_hidden_history
     self.selected_first_exp = False  # select first experiment to load meta, for discoverability
 
     # persistent settings
     self.settings = QtCore.QSettings('OverBoard', 'OverBoard')
+    if clear_settings:
+      self.settings.clear()  # clean slate
 
     # get screen size
     screen_size = QtWidgets.QDesktopWidget().availableGeometry(self).size()
@@ -209,7 +211,7 @@ class Window(QtWidgets.QMainWindow):
 
     # window size and title
     self.resize(screen_size.width() * 0.6, screen_size.height() * 0.95)
-    self.setWindowTitle('OverBoard - ' + args.folder)
+    self.setWindowTitle(window_title)
 
     self.clipboard = QtWidgets.QApplication.clipboard()
 

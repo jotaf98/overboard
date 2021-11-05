@@ -15,15 +15,15 @@ class Experiments():
   """Stores all Experiment objects, in the name-experiment mapping exps.
   Also manages a thread to find new experiments asynchronously."""
   def __init__(self, base_folder, window, force_reopen_files, poll_time, crawler_poll_time, log_level):
+    # set logging messages threshold level
+    logger.setLevel(getattr(logging, log_level.upper(), None))
+
     self.exps = {}
     self.base_folder = base_folder
     self.window = window
     self.force_reopen_files = force_reopen_files
     self.poll_time = poll_time
     
-    # set logging messages threshold level
-    logger.setLevel(getattr(logging, log_level.upper(), None))
-
     # create crawler object and thread
     self.crawler = ExperimentsCrawler(base_folder=base_folder, crawler_poll_time=crawler_poll_time)
     self.thread = QThread()
@@ -96,6 +96,8 @@ class Experiment():
     self.name = rel_path[1:]  # the experiment name is the directory path, relative to the base folder
     self.filename = filename
     self.directory = fs_path.combine(base_folder, rel_path)
+
+    logger.debug(f"Initializing thread to load {self.name}")
 
     self.meta = {}
     self.metrics = []  # names of metrics
