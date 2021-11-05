@@ -46,8 +46,8 @@ class FancyAxis(pg.AxisItem):
       p.drawLine(p1, p2)
 
     # draw all text
-    if self.tickFont is not None:
-      p.setFont(self.tickFont)
+    if self.style['tickFont'] is not None:
+      p.setFont(self.style['tickFont'])
     p.setPen(self.pen())
     for rect, flags, text in textSpecs:
       p.drawText(rect, flags, text)
