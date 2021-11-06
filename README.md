@@ -1,6 +1,7 @@
 # OverBoard
 OverBoard is a lightweight yet powerful dashboard to monitor your experiments.
 
+<br>
 <p align="center">
 Load <b>remote experiments in real-time</b> through <b>SSH/FTP</b> and <a href="https://www.pyfilesystem.org/page/index-of-filesystems/">others</a>.
 </p>
@@ -11,18 +12,18 @@ Custom visualisations (tensors and any custom plot with familiar <b>MatPlotLib</
 <img align="center" src="https://raw.githubusercontent.com/jotaf98/overboard/master/images/screen2.png" /><br><br>
 
 <p align="center">
-A table of <b>hyper-parameters</b> with Python-syntax filtering.
+A sortable table of <b>hyper-parameters</b> with Python-syntax filtering.
 </p>
 <img align="center" src="https://raw.githubusercontent.com/jotaf98/overboard/master/images/screen3.png" /><br><br>
 
 <p align="center">
-<b>Custom X/Y axes</b>, including hyper-parameters (<b>bubble plots</b>) and percentile intervals (<b>shaded plots</b>).
+<b>Plot percentile intervals (<b>shaded plots</b>), custom X/Y axes</b>, and hyper-parameters (<b>bubble plots</b>).
 </p>
 <img align="center" src="https://raw.githubusercontent.com/jotaf98/overboard/master/images/screen7.png" /><br>
 
 
 
-## Installation
+# Installation
 
 You can install the dependencies with:
 
@@ -51,7 +52,7 @@ Just use: `pip install overboard_logger`
 And remember to import `overboard_logger` instead of `overboard` in your scripts.
 
 
-## Usage
+# Usage
 
 - Main interface: `python3 -m overboard <logs-directory>`
 
@@ -91,6 +92,21 @@ python -m overboard ssh://username:password@hostname/path-to-experiments
 There are a [number of other settings](https://github.com/althonos/fs.sshfs#constructor), which you can append after the path. For example, append `?keepalive=60&config_path=~/.ssh/config` to set the keepalive packets interval to 60 seconds, and specify an OpenSSH configuration file path.
 
 [Other remote file systems](https://www.pyfilesystem.org/page/index-of-filesystems/) are available by using [appropriate prefixes](https://docs.pyfilesystem.org/en/latest/openers.html) (e.g. `ftp://`).
+
+
+## Interface tips & tricks
+
+- Click a plot title to hide it (moving it to the bottom) or to show it again.
+
+- Click a plot line to select that experiment in the table, and vice-versa.
+
+- Use the mouse wheel to zoom and drag to pan in a plot or custom visualization.
+
+- Choose an hyper-parameter as the "X axis" in the sidebar to compare different hyper-parameters graphically (bubble plot). Click a bubble to highlight that experiment. If the hyper-parameter is numerical but has wildly different orders of magnitude, check "Treat X as categorical". By default, each bubble's Y coordinate (e.g. accuracy) is taken from the last iteration; in "Scalar display" you can choose the maximum or minimum across iterations.
+
+- If you have multiple runs with different random seeds (stored as hyper-parameter "seed" for example), select "Merge: seed" in the sidebar to merge them into shaded plots (you can then select whether to show the mean, median, range or standard deviations).
+
+- You can split all experiments into different plots by selected "Panels: One per run" in the sidebar, and selecting a metric to plot in "Y axis". Similarly, they can be split by a hyper-parameter value (e.g. a different algorithm in each panel, but each has multiple plots/runs).
 
 
 ## Author
