@@ -14,7 +14,7 @@ Custom visualisations (tensors and any custom plot with familiar <b>MatPlotLib</
 <p align="center">
 A sortable table of <b>hyper-parameters</b> with Python-syntax filtering.
 </p>
-<img align="center" src="https://raw.githubusercontent.com/jotaf98/overboard/master/images/screen3.png" /><br><br>
+<img align="center" src="https://raw.githubusercontent.com/jotaf98/overboard/master/images/screen8.png" /><br><br>
 
 <p align="center">
 <b>Plot percentile intervals (<b>shaded plots</b>), custom X/Y axes</b>, and hyper-parameters (<b>bubble plots</b>).
@@ -102,11 +102,13 @@ There are a [number of other settings](https://github.com/althonos/fs.sshfs#cons
 
 - Use the mouse wheel to zoom and drag to pan in a plot or custom visualization.
 
-- Choose an hyper-parameter as the "X axis" in the sidebar to compare different hyper-parameters graphically (bubble plot). Click a bubble to highlight that experiment. If the hyper-parameter is numerical but has wildly different orders of magnitude, check "Treat X as categorical". By default, each bubble's Y coordinate (e.g. accuracy) is taken from the last iteration; in "Scalar display" you can choose the maximum or minimum across iterations.
+- Click the "A" button in the bottom-left of a plot to reset the zoom/pan.
 
-- If you have multiple runs with different random seeds (stored as hyper-parameter "seed" for example), select "Merge: seed" in the sidebar to merge them into shaded plots (you can then select whether to show the mean, median, range or standard deviations).
+- Choose an hyper-parameter as the "X axis" in the sidebar to compare different hyper-parameters graphically (*bubble plot*). Click a bubble to highlight that experiment. If the hyper-parameter is numerical but has wildly different orders of magnitude, check "Treat X as categorical". By default, each bubble's Y coordinate (e.g. accuracy) is taken from the last iteration; in "Scalar display" you can choose the maximum or minimum across iterations.
 
-- You can split all experiments into different plots by selected "Panels: One per run" in the sidebar, and selecting a metric to plot in "Y axis". Similarly, they can be split by a hyper-parameter value (e.g. a different algorithm in each panel, but each has multiple plots/runs).
+- If you have multiple runs with different random seeds (stored as hyper-parameter "seed" for example), select "Merge: seed" in the sidebar to merge them into *shaded plots* (you can then select whether to show the mean, median, range or standard deviations).
+
+- You can *split* all experiments into different plots by selected "Panels: One per run" in the sidebar, and selecting a metric to plot in "Y axis". Similarly, they can be split by a hyper-parameter value (e.g. a different algorithm in each panel, but each has multiple plots/runs).
 
 
 ## Author
