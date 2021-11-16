@@ -1,5 +1,6 @@
 
 from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSlot
+from PyQt5.QtWidgets import QMessageBox
 
 import json, re, logging
 from time import time
@@ -24,12 +25,19 @@ class Experiments():
     self.force_reopen_files = force_reopen_files
     self.poll_time = poll_time
     
-    # create crawler object and thread
-    self.crawler = ExperimentsCrawler(base_folder=base_folder, crawler_poll_time=crawler_poll_time)
-    self.thread = QThread()
+    # create crawler object
+    try:
+      self.crawler = ExperimentsCrawler(base_folder=base_folder, crawler_poll_time=crawler_poll_time)
+    except BaseException as e:
+      self.on_error_raised(str(e))
+      return  # failed to open file system, no crawling
 
-    # connect ExperimentsCrawler's signal to Experiments method slot, to return new experiments
+    # create thread and connect ExperimentsCrawler's signal to Experiments
+    # method slot, to return new experiments
+    self.thread = QThread()
     self.crawler.experiments_ready.connect(self.on_experiments_ready)
+    self.crawler.error_raised.connect(self.on_error_raised)  # same for any errors raised
+
     self.crawler.moveToThread(self.thread)  # move the crawler object to the thread
     self.thread.started.connect(self.crawler.start_crawling)  # connect thread started signal to crawler slot
     self.thread.start()  # start thread
@@ -39,6 +47,11 @@ class Experiments():
     for filepath in filepaths:
       exp = Experiment(filepath, self.base_folder, self.force_reopen_files, self.poll_time, self.window)
       self.exps[exp.name] = exp
+  
+  def on_error_raised(self, msg):
+    """The crawler found an error (e.g. no experiments found, or inaccessible path)"""
+    QMessageBox.critical(self.window, "OverBoard - Error",
+      f'Encountered an error while indexing the experiments path:\n{self.base_folder}\n\nNo more experiments will be indexed. The error was:\n"{msg}"')
 
 
 class ExperimentsCrawler(QObject):
@@ -46,6 +59,9 @@ class ExperimentsCrawler(QObject):
 
   # signal to return new experiments to the Experiments object, on the main thread
   experiments_ready = pyqtSignal(list)
+
+  # to report back errors
+  error_raised = pyqtSignal(str)
 
   def __init__(self, base_folder, crawler_poll_time):
     super().__init__()
@@ -60,33 +76,44 @@ class ExperimentsCrawler(QObject):
     the only viable mechanism to detect changes. This is further argued here:
     https://github.com/samuelcolvin/watchgod#why-no-inotify--kqueue--fsevent--winapi-support"""
 
-    known_files = set()
-    while True:
-      # find experiment files, and see if there are any new ones
-      new_files = []
-      last_time = time()
-      for filename in self.fs.walk.files(filter=['stats.csv']):
-        if filename not in known_files:  # it's new
-          new_files.append(filename)
+    if self.fs is None:
+      return
+    try:
+      known_files = set()
+      while True:
+        # find experiment files, and see if there are any new ones
+        files_exist = False
+        new_files = []
+        last_time = time()
+        for filename in self.fs.walk.files(filter=['stats.csv']):
+          files_exist = True
+          if filename not in known_files:  # it's new
+            new_files.append(filename)
 
-          # if it's taking a while, show an intermediate result
-          if time() - last_time > 0.5:  # elapsed time in seconds
-            # return the new files as a signal to the main thread
-            if len(new_files) > 0:
-              self.experiments_ready.emit(new_files)
-              known_files.update(set(new_files))
-              new_files.clear()
-            last_time = time()
+            # if it's taking a while, show an intermediate result
+            if time() - last_time > 0.5:  # elapsed time in seconds
+              # return the new files as a signal to the main thread
+              if len(new_files) > 0:
+                self.experiments_ready.emit(new_files)
+                known_files.update(set(new_files))
+                new_files.clear()
+              last_time = time()
 
-      # return the new files as a signal to the main thread
-      if len(new_files) > 0:
-        self.experiments_ready.emit(new_files)
-        known_files.update(set(new_files))
-        new_files.clear()
+        if not files_exist:
+          raise IOError("The directory does not contain any experiments (stats.csv files).")
 
-      # wait some time before looking again
-      QThread.sleep(self.crawler_poll_time)
+        # return the new files as a signal to the main thread
+        if len(new_files) > 0:
+          self.experiments_ready.emit(new_files)
+          known_files.update(set(new_files))
+          new_files.clear()
 
+        # wait some time before looking again
+        QThread.sleep(self.crawler_poll_time)
+
+    # if anything bad happens, pop up a message box and stop crawling
+    except BaseException as e:
+      self.error_raised.emit(str(e))
 
 
 class Experiment():
