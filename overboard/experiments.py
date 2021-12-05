@@ -124,8 +124,6 @@ class Experiment():
     self.filename = filename
     self.directory = fs_path.combine(base_folder, rel_path)
 
-    logger.debug(f"Initializing thread to load {self.name}")
-
     self.meta = {}
     self.metrics = []  # names of metrics
     self.data = []  # data for each metric (one list per metric)
@@ -147,6 +145,8 @@ class Experiment():
     self.table_row = None  # used internally by the window
     window.on_exp_init(self)
 
+    logger.debug(f"Initializing ExperimentReader and thread to load {self.name}")
+
     # create reader object and thread
     self.reader = ExperimentReader(filename=filename, directory=self.directory, force_reopen_files=force_reopen_files, poll_time=poll_time, name=self.name)
     self.thread = QThread()
@@ -163,6 +163,9 @@ class Experiment():
     self.thread.started.connect(self.reader.start_reading)  # connect thread started signal to reader slot
 
     self.thread.start()  # start thread
+    
+    logger.debug(f"Moved ExperimentReader to thread, for {self.name}")
+
 
 
   # receive signals from thread, and store associated data
@@ -170,7 +173,7 @@ class Experiment():
     self.meta = meta
     self.window.on_exp_meta_ready(self)
 
-  def on_header_ready(self, header):  
+  def on_header_ready(self, header):
     self.metrics = header
     self.data = [[] for _ in header]  # initialize each column of data
     self.window.on_exp_header_ready(self)
@@ -213,11 +216,13 @@ class ExperimentReader(QObject):
     self.num_columns = None
     self.num_rows = 0
 
-    self.fs = open_fs(directory)
-
   @pyqtSlot()
   def start_reading(self):
     """Do all the reading asynchronously from the main thread"""
+
+    logger.debug(f"Opening file system and starting to read, inside thread for {self.name}")
+
+    self.fs = open_fs(self.directory)
 
     # read JSON file with metadata (including timestamp), if it exists
     meta = {}
