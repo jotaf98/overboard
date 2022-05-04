@@ -295,6 +295,7 @@ class VisualizationsLoader(QObject):
         self.fs = open_fs(self.base_folder + '/visualizations')
       except FSError:
         # directory doesn't exist yet, try again later
+        logger.debug(f"Vis loader thread: no visualizations directory: {self.base_folder}")
         self.timer.start(self.poll_time * 1000)
         return
 
@@ -303,6 +304,7 @@ class VisualizationsLoader(QObject):
       self.files_iterator = self.fs.filterdir('.', files=['*.pth'], namespaces=['details'])
 
     if self.retry_file:  # try the same file again if required
+      logger.debug(f"Vis loader thread: Retrying file {self.retry_file}")
       entry = self.retry_file
       self.retry_file = None
     else:
@@ -318,6 +320,8 @@ class VisualizationsLoader(QObject):
       new_size = entry.size
 
       if new_size != self.known_file_sizes.get(name):
+        logger.debug(f"Vis loader thread: File changed, reloading: {name}")
+
         # new file or file size changed
         self.known_file_sizes[name] = new_size
 
@@ -346,6 +350,8 @@ class VisualizationsLoader(QObject):
             self.retry_file = entry  # try this file again later
           else:
             logger.exception(f"Error loading visualization data from {self.base_folder}/{name}.pth")
+      else:
+        logger.debug(f"Vis loader thread: File did not change: {name}")
     
     # wait a bit before checking next file, or a longer time if finished all files.
     # if the experiment is done, don't check again at the end.
@@ -354,4 +360,7 @@ class VisualizationsLoader(QObject):
     elif not self.exp_done:
       self.files_iterator = None  # check directory contents from scratch next time
       self.timer.start(self.poll_time * 1000)
+    else:
+      logger.debug(f"Vis loader thread: Experiment done, not reloading any visualizations.")
+
 
