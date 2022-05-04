@@ -122,12 +122,15 @@ class Visualizations(QObject):
       except Exception:
         logger.exception('Error loading visualization function from ' + source_file)
 
-    # ensure a list is returned
-    if not isinstance(panels, list): panels = [panels]
+    # ensure a dict is returned with plot titles as keys is returned
+    if not isinstance(panels, dict):
+      if not isinstance(panels, list):
+        panels = [panels]
+      panels = {name: panel for panel in panels}  # all panels have the same name by default
     return panels
 
 
-  def on_visualization_ready(self, name, data, source_code, base_folder):
+  def on_visualization_ready(self, panel_name, data, source_code, base_folder):
     """Called when an updated visualization (possibly new) has been
     loaded for the current experiment"""
 
@@ -136,7 +139,7 @@ class Visualizations(QObject):
     if base_folder != self.folder: return
 
     # render the MatPlotLib/PyQtGraph figures
-    new_plots = self.render_visualization(name, data, source_code)
+    new_plots = self.render_visualization(panel_name, data, source_code)
     
     # assign each plot to a new or reused panel.
     # NOTE: most of this complicated logic is to deal with a specific MatPlotLib/
@@ -145,11 +148,11 @@ class Visualizations(QObject):
     # to avoid this, we reuse the same widget (actually the parent panel widget) for
     # the same MatPlotLib figure every time (stored as overboard_panel attribute).
     new_panels = []
-    old_panels = self.panels.get(name, [])
+    old_panels = self.panels.get(panel_name, [])
     old_panels_pg = [p for p in old_panels if p.plot_type == 'PlotItem']
     old_panels_gl = [p for p in old_panels if p.plot_type == 'GLViewWidget']
 
-    for plot in new_plots:
+    for (name, plot) in new_plots.items():
       plot_type = self.get_plot_type(plot)
       if plot_type == 'Figure':  # MatPlotLib Figure
         if hasattr(plot, 'overboard_panel'):  # always reuse a previous panel
@@ -172,7 +175,7 @@ class Visualizations(QObject):
           widget.addItem(plot)
           panel = self.window.add_panel(widget, name)
 
-      elif plot_type == 'GLViewWidget':  # PyQtGraph GLViewWidget
+      elif plot_type in ('GLViewWidget', 'PlotWidget'):  # PyQtGraph GLViewWidget/PlotWidget
         widget = plot
         if old_panels_gl:
           # we can reuse an old panel, but assign the new GLViewWidget to it
@@ -195,10 +198,11 @@ class Visualizations(QObject):
 
       panel.plot_type = plot_type  # remember the plot type (regardless of nested widgets)
       new_panels.append(panel)
+      panel.title_widget.setText(name)  # ensure title is correct
     
     # remove any panels we did not reuse from the layout
     self.delete_vis_panels(list(set(old_panels) - set(new_panels)))
-    self.panels[name] = new_panels
+    self.panels[panel_name] = new_panels
 
   def select(self, exp):
     """Select a new experiment, showing its visualizations (and removing previously selected ones)"""
@@ -238,6 +242,8 @@ class Visualizations(QObject):
       return 'PlotItem'
     if isinstance(plot, gl.GLViewWidget):
       return 'GLViewWidget'
+    if isinstance(plot, pg.PlotWidget):
+      return 'PlotWidget'
     raise TypeError("Visualization functions (Logger.visualize) should return a list of "
       "MatPlotLib Figure, PyQtGraph PlotItem, or PyQtGraph GLViewWidget. A plot with "
       "class " + type(plot).__name__ + " was found.")

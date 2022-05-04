@@ -228,8 +228,9 @@ class Logger:
     where name is a unique name, and the following arguments/keyword arguments
     can be anything (e.g. tensors).
     The function can draw any graphics and return them as a list of MatPlotLib
-    Figure objects, or PyQtGraph PlotItem/GLViewWidget objects.
-    These will be shown when the experiment is selected in the GUI."""
+    Figure objects, or PyQtGraph PlotItem/PlotWidget/GLViewWidget objects.
+    These will be shown when the experiment is selected in the GUI.
+    A dict with the plot titles as strings may also be returned instead."""
 
     # create folder 'visualizations' to store the files, if it doesn't exist
     vis_dir = self.directory + '/visualizations'
@@ -256,8 +257,8 @@ class Logger:
       else:
         # user function. copy function source file to freeze changes in visualization code
         source_file = inspect.getsourcefile(func)  # python source for function
-        if not source_file or func.__name__ == '<lambda>':
-          raise ValueError("Only visualization functions defined at the top-level of a script are supported.")
+        if not source_file or func.__name__ == '<lambda>' or inspect.ismethod(func):
+          raise ValueError("Only visualization functions (not methods) defined at the top-level of a script are supported.")
         shutil.copy(source_file, vis_dir + '/' + name + '.py')
 
       # register visualization function for quick look-up next time this is called
